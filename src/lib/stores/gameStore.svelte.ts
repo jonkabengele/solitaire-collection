@@ -22,6 +22,9 @@ export type NavTarget = 'menu' | VariantId;
 
 type NavListener = (target: NavTarget) => void;
 
+/** Hint channel: scenes highlight the suggested move's source + target. */
+type HintListener = (move: Move | null) => void;
+
 /** A suspended (non-active) in-progress game plus its frozen elapsed time. */
 type Slot = { state: GameState; elapsedMs: number };
 
@@ -35,9 +38,12 @@ class GameStore {
     startedAt: Date.now()
   });
   #pendingSwitch = $state<VariantId | null>(null);
+  #redoLog: Move[] = [];
+  #autoTimer: ReturnType<typeof setInterval> | null = null;
   readonly #slots: Partial<Record<VariantId, Slot>> = {};
   readonly #listeners = new Set<StateListener>();
   readonly #navListeners = new Set<NavListener>();
+  readonly #hintListeners = new Set<HintListener>();
 
   /** The canonical game state. Never mutated in place. */
   get state(): GameState {
@@ -57,6 +63,32 @@ class GameStore {
   /** `true` when the move log is non-empty (undo is meaningful). */
   get canUndo(): boolean {
     return this.#state.moves.length > 0;
+  }
+
+  /** `true` when an undone move can be re-applied. */
+  get canRedo(): boolean {
+    return this.#redoLog.length > 0;
+  }
+
+  /**
+   * `true` when greedily playing only foundation moves wins — the
+   * "remaining moves are trivial" condition for the Finish button.
+   * (A strict "all legalMoves are foundation moves" check never fires in
+   * Klondike, where foundation→tableau take-backs stay legal forever.)
+   */
+  get canAutoComplete(): boolean {
+    const s = this.#state;
+    if (s.status !== 'playing' || s.variant === 'tripeaks') return false;
+    const v = this.variant;
+    let cur = s;
+    for (let i = 0; i < 60; i++) {
+      const fm = v
+        .legalMoves(cur)
+        .find((m) => m.type === 'move' && m.to.area === 'foundation');
+      if (!fm) return v.isWon(cur);
+      cur = v.applyMove(cur, fm);
+    }
+    return false;
   }
 
   /** Number of committed moves. */
@@ -81,6 +113,8 @@ class GameStore {
    */
   newGame(variantId: VariantId = this.#state.variant, seed = newSeed()): void {
     this.#slots[variantId] = undefined;
+    this.#redoLog = [];
+    this.#stopAuto();
     const s = getVariant(variantId).initialState(seed);
     this.#commit({ ...s, startedAt: Date.now() });
   }
@@ -128,6 +162,7 @@ class GameStore {
   dispatchMove(move: Move): boolean {
     const next = applyMove(this.#state, move);
     if (next === this.#state) return false;
+    this.#redoLog = [];
     this.#commit(this.#stamp(next));
     return true;
   }
@@ -141,7 +176,66 @@ class GameStore {
     if (s.moves.length === 0) return;
     let rebuilt = this.variant.initialState(s.seed);
     for (const m of s.moves.slice(0, -1)) rebuilt = applyMove(rebuilt, m);
+    this.#redoLog = [...this.#redoLog, s.moves[s.moves.length - 1]];
     this.#commit({ ...rebuilt, startedAt: s.startedAt, elapsedMs: s.elapsedMs });
+  }
+
+  /** Re-apply the most recently undone move (deterministic replay). */
+  redo(): void {
+    const m = this.#redoLog[this.#redoLog.length - 1];
+    if (!m) return;
+    const next = applyMove(this.#state, m);
+    if (next === this.#state) return;
+    this.#redoLog = this.#redoLog.slice(0, -1);
+    this.#commit(this.#stamp(next));
+  }
+
+  /**
+   * Suggest a move: foundations first (safest progress), then moves that
+   * build on non-empty tableau columns, then anything else; draws last.
+   * Emitted on the hint channel for the active scene to highlight.
+   */
+  requestHint(): void {
+    if (this.#state.status !== 'playing') {
+      this.#emitHint(null);
+      return;
+    }
+    const ms = this.legalMoves();
+    const rank = (m: Move): number => {
+      if (m.type === 'draw') return 4;
+      if (m.to.area === 'foundation') return 0;
+      if (m.from.area === 'tableau' && m.to.area === 'tableau') return 1;
+      if (m.to.area === 'cell') return 2;
+      return 3;
+    };
+    this.#emitHint(ms.slice().sort((a, b) => rank(a) - rank(b))[0] ?? null);
+  }
+
+  /** Subscribe to hint suggestions. Returns unsubscribe. */
+  onHint(fn: HintListener): () => void {
+    this.#hintListeners.add(fn);
+    return () => this.#hintListeners.delete(fn);
+  }
+
+  /**
+   * Auto-finish: when `canAutoComplete`, dispatch one foundation move every
+   * 140ms so cards visibly fly home. Stops when no foundation move remains.
+   */
+  autoComplete(): void {
+    if (!this.canAutoComplete || this.#autoTimer) return;
+    this.#autoTimer = setInterval(() => {
+      const m = this.legalMoves().find(
+        (x) => x.type === 'move' && x.to.area === 'foundation'
+      );
+      if (!m || this.dispatchMove(m) === false) this.#stopAuto();
+    }, 140);
+  }
+
+  #stopAuto(): void {
+    if (this.#autoTimer) {
+      clearInterval(this.#autoTimer);
+      this.#autoTimer = null;
+    }
   }
 
   /** All legal moves in the current position (used for double-tap autofinish, later for hints). */
@@ -184,6 +278,8 @@ class GameStore {
         : undefined;
     const saved = this.#slots[id];
     this.#slots[id] = undefined;
+    this.#redoLog = [];
+    this.#stopAuto();
     if (saved) {
       const restored =
         saved.state.status === 'playing'
@@ -211,6 +307,10 @@ class GameStore {
 
   #emitNav(t: NavTarget): void {
     for (const fn of this.#navListeners) fn(t);
+  }
+
+  #emitHint(m: Move | null): void {
+    for (const fn of this.#hintListeners) fn(m);
   }
 }
 

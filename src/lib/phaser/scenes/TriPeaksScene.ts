@@ -5,7 +5,7 @@
  * No drag — the variant is tap-driven per spec.
  */
 import Phaser from 'phaser';
-import type { GameState, TriPeaksState } from '../../engine/types.js';
+import type { GameState, Move, TriPeaksState } from '../../engine/types.js';
 import { gameStore } from '../../stores/gameStore.svelte.js';
 import {
   computeTriPeaksLayout,
@@ -16,7 +16,10 @@ import {
 import { CardSprite } from '../objects/CardSprite.js';
 import { Pile } from '../objects/Pile.js';
 import { syncSprites, type Target } from '../objects/spriteSync.js';
-import { playSfx } from '../sfx.js';
+import { SwipeController } from '../objects/SwipeController.js';
+import { hintFx, type HintRect } from '../objects/hintFx.js';
+import { bindSfx, playSfx } from '../sfx.js';
+import { haptic } from '../haptics.js';
 
 const PLAYABLE_TINT = 0xffe28a;
 
@@ -26,7 +29,10 @@ export class TriPeaksScene extends Phaser.Scene {
   private layout!: TriPeaksLayout;
   private current?: TriPeaksState;
   private stockZone?: Phaser.GameObjects.Zone;
+  private swipeCtl?: SwipeController;
   private unsub?: () => void;
+  private unsubHint?: () => void;
+  private dealtSeed?: string;
 
   constructor() {
     super('tripeaks');
@@ -36,9 +42,15 @@ export class TriPeaksScene extends Phaser.Scene {
     for (const s of this.sprites.values()) s.destroy();
     this.sprites.clear();
     this.current = undefined;
+    this.swipeCtl = new SwipeController(this, {
+      onUndo: () => gameStore.undo(),
+      onRedo: () => gameStore.redo()
+    });
+    bindSfx(this);
     this.rebuildLayout();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.rebuildLayout, this);
     this.unsub = gameStore.subscribe((s) => this.onState(s));
+    this.unsubHint = gameStore.onHint((m) => this.showHint(m));
     this.onState(gameStore.state);
     if (gameStore.state.variant !== 'tripeaks') gameStore.newGame('tripeaks');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.dispose());
@@ -50,7 +62,10 @@ export class TriPeaksScene extends Phaser.Scene {
     if (s.variant !== 'tripeaks') return;
     this.current = s;
     this.syncState(s);
-    if (s.status === 'won') playSfx('win');
+    if (s.status === 'won') {
+      playSfx('win');
+      haptic('win');
+    }
   }
 
   /** Recompute geometry + stock/waste slot outlines after canvas resize. */
@@ -76,6 +91,7 @@ export class TriPeaksScene extends Phaser.Scene {
     if (!s || s.stock.length === 0) return;
     const ok = gameStore.dispatchMove({ type: 'draw' });
     playSfx(ok ? 'draw' : 'invalid');
+    haptic(ok ? 'draw' : 'invalid');
   }
 
   /** Tap an exposed tableau card: engine validates the rank chain. */
@@ -91,6 +107,7 @@ export class TriPeaksScene extends Phaser.Scene {
       cardId: spr.cardId
     });
     playSfx(ok ? 'place' : 'invalid');
+    haptic(ok ? 'place' : 'invalid');
     if (!ok) this.shake(spr);
   }
 
@@ -122,7 +139,8 @@ export class TriPeaksScene extends Phaser.Scene {
         x: p.x,
         y: p.y,
         depth: tripeaksRow(i) * 20,
-        interactive: c.faceUp ? 'tap' : 'none' // face-up ⇒ exposed ⇒ tappable
+        interactive: c.faceUp ? 'tap' : 'none', // face-up ⇒ exposed ⇒ tappable
+        dealOrder: i
       });
     });
     s.stock.forEach((c, i) =>
@@ -144,15 +162,34 @@ export class TriPeaksScene extends Phaser.Scene {
         x: L.waste.x,
         y: L.waste.y,
         depth: 300 + i,
-        interactive: 'none'
+        interactive: 'none',
+        dealOrder: 29 + i
       })
     );
     return out;
   }
 
+  /** Highlight the hinted move's card, or the stock for a draw hint. */
+  private showHint(m: Move | null): void {
+    if (!m || !this.current) return;
+    const rects: HintRect[] = [];
+    const { cardW, cardH } = this.layout;
+    if (m.type === 'draw') {
+      rects.push({ x: this.layout.stock.x, y: this.layout.stock.y, w: cardW, h: cardH });
+    } else {
+      const spr = this.sprites.get(m.cardId);
+      if (spr) rects.push({ x: spr.x, y: spr.y, w: cardW, h: cardH });
+    }
+    hintFx(this, rects);
+  }
+
   private syncState(s: TriPeaksState): void {
     const targets = this.computeTargets(s);
-    syncSprites(this, this.sprites, targets, new Set());
+    const deal =
+      s.seed !== this.dealtSeed ? { x: this.layout.stock.x, y: this.layout.stock.y } : null;
+    this.dealtSeed = s.seed;
+    if (deal) playSfx('shuffle');
+    syncSprites(this, this.sprites, targets, new Set(), deal);
     const playable = new Set(
       gameStore
         .legalMoves()
@@ -171,6 +208,8 @@ export class TriPeaksScene extends Phaser.Scene {
 
   private dispose(): void {
     this.unsub?.();
+    this.unsubHint?.();
+    this.swipeCtl?.destroy();
     this.scale.off(Phaser.Scale.Events.RESIZE, this.rebuildLayout, this);
   }
 }

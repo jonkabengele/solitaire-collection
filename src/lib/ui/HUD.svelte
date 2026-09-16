@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { VariantId } from '../engine/types.js';
   import { gameStore } from '../stores/gameStore.svelte.js';
+  import { settingsStore } from '../stores/settings.svelte.js';
 
   const VARIANTS: { id: VariantId; short: string; full: string }[] = [
     { id: 'klondike', short: 'K', full: 'Klondike' },
@@ -15,6 +16,8 @@
     }, 500);
     return () => clearInterval(t);
   });
+
+  let settingsOpen = $state(false);
 
   const cur = $derived(gameStore.state);
   const pending = $derived(gameStore.pendingSwitch);
@@ -55,10 +58,38 @@
     <span>{fmt(elapsed)}</span>
   </div>
   <div class="actions">
+    {#if gameStore.canAutoComplete}
+      <button class="accent" onclick={() => gameStore.autoComplete()}>Finish</button>
+    {/if}
+    <button onclick={() => gameStore.requestHint()} disabled={cur.status !== 'playing'}>Hint</button>
     <button onclick={() => gameStore.undo()} disabled={!gameStore.canUndo}>Undo</button>
+    <button onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>Redo</button>
     <button onclick={() => gameStore.newGame()}>New</button>
+    <button class="ghost" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>⚙</button>
   </div>
 </header>
+
+{#if settingsOpen}
+  <div class="overlay" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
+    <div class="dialog">
+      <p class="q">Settings</p>
+      <label class="slider-row">
+        <span>Sound</span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={Math.round(settingsStore.volume * 100)}
+          oninput={(e) => (settingsStore.volume = Number(e.currentTarget.value) / 100)}
+        />
+        <span class="vol">{Math.round(settingsStore.volume * 100)}%</span>
+      </label>
+      <div class="row">
+        <button class="primary" onclick={() => (settingsOpen = false)}>Done</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if pending}
   <div class="overlay" role="dialog" aria-modal="true" aria-label="Switch variant">
@@ -193,9 +224,37 @@
     margin-top: 0.9rem;
   }
 
-  .row .primary {
+  .row .primary,
+  .accent {
     background: #ffd166;
     color: #123f30;
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+    font-size: 0.85rem;
+  }
+
+  .slider-row input[type='range'] {
+    flex: 1;
+    accent-color: #ffd166;
+  }
+
+  .vol {
+    min-width: 2.6rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  @media (max-width: 620px) {
+    .actions button {
+      padding: 0.35rem 0.55rem;
+      font-size: 0.8rem;
+    }
   }
 
   @media (min-width: 620px) {

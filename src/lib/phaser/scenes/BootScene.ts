@@ -30,6 +30,9 @@ export class BootScene extends Phaser.Scene {
       });
     }
     this.load.svg('card-back', 'assets/cards/back.svg', { width: TEX_W, height: TEX_H });
+    for (const n of ['place', 'flip', 'draw', 'shuffle', 'invalid', 'win']) {
+      this.load.audio(n, `assets/sfx/${n}.wav`);
+    }
   }
 
   create(): void {

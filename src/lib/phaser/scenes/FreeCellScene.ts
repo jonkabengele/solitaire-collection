@@ -12,7 +12,10 @@ import { CardSprite } from '../objects/CardSprite.js';
 import { Pile } from '../objects/Pile.js';
 import { DragController, type DragHost } from '../objects/DragController.js';
 import { syncSprites, type Target } from '../objects/spriteSync.js';
-import { playSfx } from '../sfx.js';
+import { SwipeController } from '../objects/SwipeController.js';
+import { hintFx, type HintRect } from '../objects/hintFx.js';
+import { bindSfx, playSfx } from '../sfx.js';
+import { haptic } from '../haptics.js';
 
 const isRed = (c: Card): boolean => c.suit === 'hearts' || c.suit === 'diamonds';
 
@@ -33,7 +36,10 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
   private current?: FreeCellState;
   private dragIds = new Set<string>();
   private dragCtl?: DragController;
+  private swipeCtl?: SwipeController;
   private unsub?: () => void;
+  private unsubHint?: () => void;
+  private dealtSeed?: string;
 
   constructor() {
     super('freecell');
@@ -46,9 +52,15 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
     this.current = undefined;
     this.input.dragDistanceThreshold = 6;
     this.dragCtl = new DragController(this, this);
+    this.swipeCtl = new SwipeController(this, {
+      onUndo: () => gameStore.undo(),
+      onRedo: () => gameStore.redo()
+    });
+    bindSfx(this);
     this.rebuildLayout();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.rebuildLayout, this);
     this.unsub = gameStore.subscribe((s) => this.onState(s));
+    this.unsubHint = gameStore.onHint((m) => this.showHint(m));
     this.onState(gameStore.state);
     if (gameStore.state.variant !== 'freecell') gameStore.newGame('freecell');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.dispose());
@@ -73,6 +85,7 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
   tryMove(move: Move): void {
     const ok = gameStore.dispatchMove(move);
     playSfx(ok ? 'place' : 'invalid');
+    haptic(ok ? 'place' : 'invalid');
     this.resync();
   }
 
@@ -102,7 +115,10 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
     if (s.variant !== 'freecell') return;
     this.current = s;
     this.syncState(s);
-    if (s.status === 'won') playSfx('win');
+    if (s.status === 'won') {
+      playSfx('win');
+      haptic('win');
+    }
   }
 
   private pileCards(ref: PileRef): readonly Card[] | undefined {
@@ -174,15 +190,37 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
           x: L.tableauX[ci],
           y: L.tableauTop + L.cardH / 2 + i * L.upGap * k,
           depth: 300 + ci * 40 + i,
-          interactive: isValidRun(col, i) ? ('drag' as const) : ('none' as const)
+          interactive: isValidRun(col, i) ? ('drag' as const) : ('none' as const),
+          dealOrder: i * 8 + ci
         });
       });
     });
     return out;
   }
 
+  /** Highlight the hinted move's source card and target zone for ~2s. */
+  private showHint(m: Move | null): void {
+    if (!m || m.type !== 'move' || !this.current) return;
+    const rects: HintRect[] = [];
+    const { cardW, cardH } = this.layout;
+    const spr = this.sprites.get(m.cardId);
+    if (spr) rects.push({ x: spr.x, y: spr.y, w: cardW, h: cardH });
+    const zone = this.layout.zones.find(
+      (z) => z.ref.area === m.to.area && z.ref.index === m.to.index
+    );
+    if (zone) rects.push({ x: zone.anchor.x, y: zone.anchor.y, w: cardW, h: cardH });
+    hintFx(this, rects);
+  }
+
   private syncState(s: FreeCellState): void {
-    syncSprites(this, this.sprites, this.computeTargets(s), this.dragIds);
+    // FreeCell has no stock — dealt cards rain in from above the board.
+    const deal =
+      s.seed !== this.dealtSeed
+        ? { x: this.scale.width / 2, y: -this.layout.cardH }
+        : null;
+    this.dealtSeed = s.seed;
+    if (deal) playSfx('shuffle');
+    syncSprites(this, this.sprites, this.computeTargets(s), this.dragIds, deal);
     for (const spr of this.sprites.values()) {
       spr.setDisplaySize(this.layout.cardW, this.layout.cardH);
     }
@@ -190,7 +228,9 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
 
   private dispose(): void {
     this.unsub?.();
+    this.unsubHint?.();
     this.dragCtl?.destroy();
+    this.swipeCtl?.destroy();
     this.scale.off(Phaser.Scale.Events.RESIZE, this.rebuildLayout, this);
   }
 }

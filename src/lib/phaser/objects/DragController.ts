@@ -7,6 +7,7 @@
 import Phaser from 'phaser';
 import type { Move, PileRef } from '../../engine/types.js';
 import { CardSprite } from './CardSprite.js';
+import { haptic } from '../haptics.js';
 
 /** What a scene must provide for DragController to work. */
 export interface DragHost {
@@ -58,6 +59,7 @@ export class DragController {
     go: Phaser.GameObjects.GameObject
   ): void {
     if (!(go instanceof CardSprite)) return;
+    haptic('pickup');
     this.group = this.host.runSprites(go.ref, go.pileIndex);
     if (!this.group.includes(go)) this.group = [go];
     this.offsets = this.group.map((s) => ({ x: s.x - go.x, y: s.y - go.y }));

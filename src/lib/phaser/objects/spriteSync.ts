@@ -2,6 +2,9 @@
  * Shared state→sprite diff used by every board scene. Each scene computes
  * a flat `Target[]` (position, depth, interactivity) from canonical state;
  * `syncSprites` creates/rebinds `CardSprite`s and tweens moved cards.
+ *
+ * Motion spec (§Phase 4): Place = 150ms ease-out with slight overshoot
+ * (Back, s≈0.5); Deal = cards fly from `dealFrom` staggered 40ms each.
  */
 import Phaser from 'phaser';
 import type { Card, PileRef } from '../../engine/types.js';
@@ -19,20 +22,27 @@ export type Target = {
   y: number;
   depth: number;
   interactive: Interactivity;
+  /** Position in the deal sequence (stagger = dealOrder × 40ms). */
+  dealOrder?: number;
 };
 
 export const PLACE_MS = 150;
+const DEAL_MS = 320;
+const DEAL_STAGGER = 40;
+
+/** Deal animation origin — when set, unplaced cards fly in from here. */
+export type DealOrigin = { x: number; y: number } | null;
 
 /**
- * Diff `targets` onto the sprite map: new cards are placed instantly on
- * first bind, moved cards tween to position, mid-drag cards are skipped.
- * Interactivity follows the target each sync.
+ * Diff `targets` onto the sprite map. Moved cards tween to position;
+ * mid-drag cards are skipped; interactivity follows the target each sync.
  */
 export function syncSprites(
   scene: Phaser.Scene,
   sprites: Map<string, CardSprite>,
   targets: Target[],
-  dragIds: Set<string>
+  dragIds: Set<string>,
+  dealFrom: DealOrigin = null
 ): void {
   for (const t of targets) {
     let spr = sprites.get(t.card.id);
@@ -43,13 +53,39 @@ export function syncSprites(
     spr.bind(t.card, t.ref, t.pileIndex);
     if (!dragIds.has(t.card.id)) {
       if (!spr.placed) {
-        spr.setPosition(t.x, t.y);
         spr.placed = true;
+        const staticAtOrigin =
+          dealFrom && Math.abs(dealFrom.x - t.x) < 1 && Math.abs(dealFrom.y - t.y) < 1;
+        if (dealFrom && !staticAtOrigin) {
+          spr.setPosition(dealFrom.x, dealFrom.y);
+          spr.setDepth(900 + (t.dealOrder ?? 0)); // dealt cards fly over the board
+          spr.moveTween = scene.tweens.add({
+            targets: spr,
+            x: t.x,
+            y: t.y,
+            duration: DEAL_MS,
+            delay: (t.dealOrder ?? 0) * DEAL_STAGGER,
+            ease: 'Cubic.easeOut',
+            onComplete: () => spr.setDepth(t.depth)
+          });
+        } else {
+          spr.setPosition(t.x, t.y);
+          spr.setDepth(t.depth);
+        }
       } else if (Math.abs(spr.x - t.x) > 0.5 || Math.abs(spr.y - t.y) > 0.5) {
-        scene.tweens.killTweensOf(spr);
-        scene.tweens.add({ targets: spr, x: t.x, y: t.y, duration: PLACE_MS, ease: 'Cubic.easeOut' });
+        spr.moveTween?.stop();
+        spr.moveTween = scene.tweens.add({
+          targets: spr,
+          x: t.x,
+          y: t.y,
+          duration: PLACE_MS,
+          ease: 'Back.easeOut',
+          easeParams: [0.5] // ~5% overshoot
+        });
+        spr.setDepth(t.depth);
+      } else {
+        spr.setDepth(t.depth);
       }
-      spr.setDepth(t.depth);
     }
     if (t.interactive === 'drag') spr.setDraggable(true);
     else if (t.interactive === 'tap') spr.setTappable(true);
