@@ -1,29 +1,40 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import HUD from './lib/ui/HUD.svelte';
+  import { createGame } from './lib/phaser/game.js';
+
+  let gameEl!: HTMLDivElement;
+
+  onMount(() => {
+    const game = createGame(gameEl);
+    return () => game.destroy(true);
+  });
+</script>
+
 <main class="shell">
-  <h1>Solitaire Collection</h1>
-  <p>Klondike &middot; FreeCell &middot; TriPeaks</p>
+  <HUD />
+  <div class="game" bind:this={gameEl}></div>
 </main>
 
 <style>
   .shell {
-    min-height: 100dvh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: calc(1rem + var(--sat)) calc(1rem + var(--sar))
-      calc(1rem + var(--sab)) calc(1rem + var(--sal));
-    text-align: center;
+    padding-top: var(--sat);
+    padding-bottom: var(--sab);
+    padding-left: var(--sal);
+    padding-right: var(--sar);
   }
 
-  h1 {
-    font-size: clamp(1.75rem, 6vw, 3rem);
-    font-weight: 700;
-    letter-spacing: -0.02em;
+  .game {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    touch-action: none;
   }
 
-  p {
-    color: rgba(255, 255, 255, 0.65);
-    font-size: clamp(0.95rem, 3vw, 1.15rem);
+  .game :global(canvas) {
+    display: block;
   }
 </style>

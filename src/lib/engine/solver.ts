@@ -170,6 +170,64 @@ function orderedMoves(variant: Variant, s: GameState): Move[] {
   return out;
 }
 
+type Frame = {
+  s: GameState;
+  ms: Move[];
+  i: number;
+  /** Parent frame + the move that produced this state — used by `solve`. */
+  parent?: Frame;
+  via?: Move;
+};
+
+/** Shared DFS core. `wantPath` tracks parent links so a win can be replayed. */
+function search(
+  variant: Variant,
+  initial: GameState,
+  opts: SolveOptions,
+  wantPath: boolean
+): { won: boolean; path: Move[] } {
+  const budgetMs = opts.budgetMs ?? 500;
+  const maxNodes = opts.maxNodes ?? 200_000;
+  const deadline = Date.now() + budgetMs;
+
+  if (variant.isWon(initial)) return { won: true, path: [] };
+
+  const seen = new Set<string>([stateKey(initial)]);
+  const stack: Frame[] = [{ s: initial, ms: orderedMoves(variant, initial), i: 0 }];
+
+  const pathOf = (leaf: Frame, lastMove: Move): Move[] => {
+    const out: Move[] = [lastMove];
+    for (let f = leaf; f.parent; f = f.parent) out.push(f.via as Move);
+    return out.reverse();
+  };
+
+  let nodes = 0;
+  while (stack.length > 0) {
+    nodes++;
+    if ((nodes & 0x3ff) === 0 && (Date.now() > deadline || nodes > maxNodes))
+      return { won: false, path: [] };
+
+    const frame = stack[stack.length - 1];
+    if (frame.i >= frame.ms.length) {
+      stack.pop();
+      continue;
+    }
+    const via = frame.ms[frame.i++];
+    const next = variant.applyMove(frame.s, via);
+    if (variant.isWon(next)) return { won: true, path: wantPath ? pathOf(frame, via) : [] };
+    const key = stateKey(next);
+    if (!seen.has(key)) {
+      seen.add(key);
+      stack.push(
+        wantPath
+          ? { s: next, ms: orderedMoves(variant, next), i: 0, parent: frame, via }
+          : { s: next, ms: orderedMoves(variant, next), i: 0 }
+      );
+    }
+  }
+  return { won: false, path: [] };
+}
+
 /**
  * Depth-first solvability check with a transposition table and heuristic move
  * ordering (spec §4.4). Deterministic in structure; the wall-clock budget is
@@ -179,36 +237,22 @@ function orderedMoves(variant: Variant, s: GameState): Move[] {
  * @returns `true` if a winning line was found within the budget.
  */
 export function isSolvable(variant: Variant, initial: GameState, opts: SolveOptions = {}): boolean {
-  const budgetMs = opts.budgetMs ?? 500;
-  const maxNodes = opts.maxNodes ?? 200_000;
-  const deadline = Date.now() + budgetMs;
+  return search(variant, initial, opts, false).won;
+}
 
-  if (variant.isWon(initial)) return true;
-
-  const seen = new Set<string>([stateKey(initial)]);
-  const stack: { s: GameState; ms: Move[]; i: number }[] = [
-    { s: initial, ms: orderedMoves(variant, initial), i: 0 }
-  ];
-
-  let nodes = 0;
-  while (stack.length > 0) {
-    nodes++;
-    if ((nodes & 0x3ff) === 0 && (Date.now() > deadline || nodes > maxNodes)) return false;
-
-    const frame = stack[stack.length - 1];
-    if (frame.i >= frame.ms.length) {
-      stack.pop();
-      continue;
-    }
-    const next = variant.applyMove(frame.s, frame.ms[frame.i++]);
-    if (variant.isWon(next)) return true;
-    const key = stateKey(next);
-    if (!seen.has(key)) {
-      seen.add(key);
-      stack.push({ s: next, ms: orderedMoves(variant, next), i: 0 });
-    }
-  }
-  return false;
+/**
+ * Like {@link isSolvable} but returns the winning move sequence, or `null`
+ * when no line was found within budget. The moves replay through `applyMove`
+ * from `initial` to a won state — powers E2E playthroughs and (Phase 4)
+ * auto-complete.
+ */
+export function solve(
+  variant: Variant,
+  initial: GameState,
+  opts: SolveOptions = {}
+): Move[] | null {
+  const r = search(variant, initial, opts, true);
+  return r.won ? r.path : null;
 }
 
 /** Result of `findSolvableSeed`. */
