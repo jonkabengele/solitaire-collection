@@ -1,35 +1,45 @@
 /**
- * Klondike board scene. Renders canonical `KlondikeState` from gameStore
- * and dispatches `Move`s on interaction — it never mutates state itself.
- * Every committed change arrives via `gameStore.subscribe` and is applied
- * as a position/texture diff with a 150ms ease-out place tween.
+ * FreeCell board scene. All 52 cards face-up: 4 free cells and 4
+ * foundations on the top row, 8 cascades below. A tableau card is
+ * grabbable only when the run from it downward is a valid descending
+ * alternating sequence; capacity is the engine's call on drop.
  */
 import Phaser from 'phaser';
-import type { Card, GameState, KlondikeState, Move, PileRef } from '../../engine/types.js';
+import type { Card, FreeCellState, GameState, Move, PileRef } from '../../engine/types.js';
 import { gameStore } from '../../stores/gameStore.svelte.js';
-import { computeLayout, type BoardLayout } from '../layout.js';
+import { computeFreeCellLayout, type FreeCellLayout } from '../freecellLayout.js';
 import { CardSprite } from '../objects/CardSprite.js';
 import { Pile } from '../objects/Pile.js';
 import { DragController, type DragHost } from '../objects/DragController.js';
 import { syncSprites, type Target } from '../objects/spriteSync.js';
 import { playSfx } from '../sfx.js';
 
-export class KlondikeScene extends Phaser.Scene implements DragHost {
+const isRed = (c: Card): boolean => c.suit === 'hearts' || c.suit === 'diamonds';
+
+/** Whether `col` from `pileIndex` down forms a movable run (display concern). */
+function isValidRun(col: readonly Card[], pileIndex: number): boolean {
+  for (let i = pileIndex + 1; i < col.length; i++) {
+    const prev = col[i - 1];
+    const c = col[i];
+    if (prev.rank !== c.rank + 1 || isRed(prev) === isRed(c)) return false;
+  }
+  return true;
+}
+
+export class FreeCellScene extends Phaser.Scene implements DragHost {
   private sprites = new Map<string, CardSprite>();
   private piles: Pile[] = [];
-  private layout!: BoardLayout;
-  private current?: KlondikeState;
+  private layout!: FreeCellLayout;
+  private current?: FreeCellState;
   private dragIds = new Set<string>();
   private dragCtl?: DragController;
-  private stockZone?: Phaser.GameObjects.Zone;
   private unsub?: () => void;
 
   constructor() {
-    super('klondike');
+    super('freecell');
   }
 
   create(): void {
-    // Restart-safe: scene instances persist across scene.start().
     for (const s of this.sprites.values()) s.destroy();
     this.sprites.clear();
     this.dragIds.clear();
@@ -40,13 +50,13 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.rebuildLayout, this);
     this.unsub = gameStore.subscribe((s) => this.onState(s));
     this.onState(gameStore.state);
-    if (gameStore.state.variant !== 'klondike') gameStore.newGame('klondike');
+    if (gameStore.state.variant !== 'freecell') gameStore.newGame('freecell');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.dispose());
   }
 
   // ---- DragHost ----
 
-  /** The grabbed card plus every card on top of it (a tableau run). */
+  /** The grabbed card plus every card on top of it (a cascade run). */
   runSprites(ref: PileRef, pileIndex: number): CardSprite[] {
     const pile = this.pileCards(ref);
     if (!pile) return [];
@@ -89,20 +99,20 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
   // ---- internals ----
 
   private onState(s: GameState): void {
-    if (s.variant !== 'klondike') return;
+    if (s.variant !== 'freecell') return;
     this.current = s;
     this.syncState(s);
     if (s.status === 'won') playSfx('win');
   }
 
-  private pileCards(ref: PileRef): Card[] | undefined {
+  private pileCards(ref: PileRef): readonly Card[] | undefined {
     const s = this.current;
     if (!s) return undefined;
     switch (ref.area) {
-      case 'stock':
-        return s.stock;
-      case 'waste':
-        return s.waste;
+      case 'cell': {
+        const c = s.cells[ref.index];
+        return c ? [c] : [];
+      }
       case 'foundation':
         return s.foundations[ref.index];
       case 'tableau':
@@ -114,50 +124,31 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
 
   /** Recompute geometry + slot outlines after canvas resize. */
   private rebuildLayout(): void {
-    this.layout = computeLayout(this.scale.width, this.scale.height);
+    this.layout = computeFreeCellLayout(this.scale.width, this.scale.height);
     for (const p of this.piles) p.dispose();
     this.piles = this.layout.zones.map(
       (z) => new Pile(this, z.ref, z.rect, z.anchor, this.layout.cardW, this.layout.cardH)
     );
-    if (this.stockZone) this.stockZone.destroy();
-    const stockRect = this.layout.zones[0].rect;
-    this.stockZone = this.add
-      .zone(stockRect.centerX, stockRect.centerY, stockRect.width, stockRect.height)
-      .setInteractive({ cursor: 'pointer' })
-      .on('pointerdown', () => {
-        playSfx('draw');
-        this.tryMove({ type: 'draw' });
-      });
     if (this.current) this.syncState(this.current);
   }
 
   /** Flatten state into per-card render targets (position + depth). */
-  private computeTargets(s: KlondikeState): Target[] {
+  private computeTargets(s: FreeCellState): Target[] {
     const L = this.layout;
     const out: Target[] = [];
 
-    s.stock.forEach((c, i) =>
+    s.cells.forEach((c, ci) => {
+      if (!c) return;
       out.push({
         card: c,
-        ref: { area: 'stock', index: 0 },
-        pileIndex: i,
-        x: L.stock.x,
-        y: L.stock.y,
-        depth: i,
-        interactive: 'none'
-      })
-    );
-    s.waste.forEach((c, i) =>
-      out.push({
-        card: c,
-        ref: { area: 'waste', index: 0 },
-        pileIndex: i,
-        x: L.waste.x,
-        y: L.waste.y,
-        depth: 100 + i,
-        interactive: i === s.waste.length - 1 ? 'drag' : 'none'
-      })
-    );
+        ref: { area: 'cell', index: ci },
+        pileIndex: 0,
+        x: L.cells[ci].x,
+        y: L.cells[ci].y,
+        depth: 100 + ci,
+        interactive: 'drag' as const
+      });
+    });
     s.foundations.forEach((f, fi) =>
       f.forEach((c, i) =>
         out.push({
@@ -167,33 +158,30 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
           x: L.foundations[fi].x,
           y: L.foundations[fi].y,
           depth: 200 + fi * 20 + i,
-          interactive: i === f.length - 1 ? 'drag' : 'none' // take-backs allowed in Klondike
+          interactive: 'none' as const // foundations are one-way in FreeCell
         })
       )
     );
     s.tableau.forEach((col, ci) => {
-      let need = L.cardH;
-      for (let i = 1; i < col.length; i++) need += col[i - 1].faceUp ? L.upGap : L.downGap;
+      const need = L.cardH + (col.length - 1) * L.upGap;
       const avail = this.scale.height - L.tableauTop - L.cardH - L.bottomPad;
-      const k = need > L.cardH ? Math.max(0.15, Math.min(1, (avail - L.cardH) / (need - L.cardH))) : 1;
-      let y = L.tableauTop + L.cardH / 2;
+      const k = col.length > 1 ? Math.max(0.2, Math.min(1, (avail - L.cardH) / (need - L.cardH))) : 1;
       col.forEach((c, i) => {
-        if (i > 0) y += (col[i - 1].faceUp ? L.upGap : L.downGap) * k;
         out.push({
           card: c,
           ref: { area: 'tableau', index: ci },
           pileIndex: i,
           x: L.tableauX[ci],
-          y,
+          y: L.tableauTop + L.cardH / 2 + i * L.upGap * k,
           depth: 300 + ci * 40 + i,
-          interactive: c.faceUp ? 'drag' : 'none'
+          interactive: isValidRun(col, i) ? ('drag' as const) : ('none' as const)
         });
       });
     });
     return out;
   }
 
-  private syncState(s: KlondikeState): void {
+  private syncState(s: FreeCellState): void {
     syncSprites(this, this.sprites, this.computeTargets(s), this.dragIds);
     for (const spr of this.sprites.values()) {
       spr.setDisplaySize(this.layout.cardW, this.layout.cardH);

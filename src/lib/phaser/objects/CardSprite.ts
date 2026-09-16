@@ -17,10 +17,13 @@ export class CardSprite extends Phaser.GameObjects.Image {
   faceUp = false;
   /** False until first positioned — first placement is instant (no deal tween in Phase 2). */
   placed = false;
+  /** Optional tap callback (tap-driven variants like TriPeaks). Fires on pointerdown. */
+  onTap?: (spr: CardSprite) => void;
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0, 'card-back');
     scene.add.existing(this);
+    this.on('pointerdown', () => this.onTap?.(this));
   }
 
   /**
@@ -48,5 +51,11 @@ export class CardSprite extends Phaser.GameObjects.Image {
       this.scene.input.setDraggable(this, false);
       this.disableInteractive();
     }
+  }
+
+  /** Enable/disable tap interactivity (no drag). */
+  setTappable(on: boolean): void {
+    if (on) this.setInteractive({ cursor: 'pointer' });
+    else if (this.input) this.disableInteractive();
   }
 }

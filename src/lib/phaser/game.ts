@@ -4,7 +4,11 @@
  */
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene.js';
+import { MenuScene } from './scenes/MenuScene.js';
 import { KlondikeScene } from './scenes/KlondikeScene.js';
+import { FreeCellScene } from './scenes/FreeCellScene.js';
+import { TriPeaksScene } from './scenes/TriPeaksScene.js';
+import { attachRouter } from './router.js';
 
 /**
  * Create and mount the Phaser game inside `parent`.
@@ -20,9 +24,10 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       width: '100%',
       height: '100%'
     },
-    scene: [BootScene, KlondikeScene],
+    scene: [BootScene, MenuScene, KlondikeScene, FreeCellScene, TriPeaksScene],
     banner: false
   });
+  attachRouter(game);
   // Dev-only handle for E2E tests and console debugging.
   if (import.meta.env.DEV) {
     (window as unknown as Record<string, unknown>).__phaserGame = game;

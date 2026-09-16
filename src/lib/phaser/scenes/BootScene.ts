@@ -33,6 +33,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.scene.start('klondike');
+    this.scene.start('menu');
   }
 }
