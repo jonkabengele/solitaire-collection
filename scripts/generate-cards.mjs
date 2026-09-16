@@ -45,11 +45,24 @@ function face(suit, rank) {
 }
 
 function back() {
+  // Deep-blue casino back: vertical gradient field, woven lattice pattern
+  // (a rotated grid = diamond crosshatch), white inset border, centre medallion.
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">
-  <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="#123f31" stroke="#0d2c22" stroke-width="2"/>
-  <rect x="9" y="9" width="${W - 18}" height="${H - 18}" rx="8" fill="none" stroke="#e8ebe6" stroke-width="2" opacity="0.75"/>
-  <rect x="${W / 2 - 26}" y="${H / 2 - 26}" width="52" height="52" transform="rotate(45 ${W / 2} ${H / 2})" fill="none" stroke="#e8ebe6" stroke-width="2" opacity="0.75"/>
-  <rect x="${W / 2 - 14}" y="${H / 2 - 14}" width="28" height="28" transform="rotate(45 ${W / 2} ${H / 2})" fill="#e8ebe6" opacity="0.75"/>
+  <defs>
+    <linearGradient id="bk-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f66cc"/>
+      <stop offset="1" stop-color="#1a3f94"/>
+    </linearGradient>
+    <pattern id="bk-weave" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <path d="M0 0 H16 M0 8 H16 M0 0 V16 M8 0 V16" stroke="#ffffff" stroke-opacity="0.09" stroke-width="3" fill="none"/>
+    </pattern>
+  </defs>
+  <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="url(#bk-bg)" stroke="#12306e" stroke-width="2"/>
+  <rect x="10" y="10" width="${W - 20}" height="${H - 20}" rx="8" fill="url(#bk-weave)" stroke="#ffffff" stroke-opacity="0.8" stroke-width="2"/>
+  <g opacity="0.55" stroke="#ffffff" fill="none">
+    <circle cx="${W / 2}" cy="${H / 2}" r="24" stroke-width="2"/>
+    <rect x="${W / 2 - 11}" y="${H / 2 - 11}" width="22" height="22" transform="rotate(45 ${W / 2} ${H / 2})" stroke-width="2"/>
+  </g>
 </svg>
 `;
 }
