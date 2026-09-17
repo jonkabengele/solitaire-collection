@@ -53,9 +53,9 @@ describe('deal layouts', () => {
     expect(s.status).toBe('playing');
   });
 
-  it('freecell: 8 face-up columns of 7,7,7,7,6,6,6,6', () => {
+  it('freecell: 7 face-up columns of 8,8,8,7,7,7,7', () => {
     const s = deal('f-seed', getVariant('freecell')) as FreeCellState;
-    expect(s.tableau.map((t) => t.length)).toEqual([7, 7, 7, 7, 6, 6, 6, 6]);
+    expect(s.tableau.map((t) => t.length)).toEqual([8, 8, 8, 7, 7, 7, 7]);
     expect(s.tableau.flat().every((c) => c.faceUp)).toBe(true);
     expect(s.cells.every((c) => c === null)).toBe(true);
   });

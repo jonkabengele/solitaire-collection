@@ -8,8 +8,9 @@ const asFC = (s: ReturnType<typeof freecell.initialState>) => s as FreeCellState
 describe('freecell initial state', () => {
   const s = asFC(freecell.initialState('fc-seed'));
 
-  it('deals 8 face-up columns and empty cells', () => {
-    expect(s.tableau).toHaveLength(8);
+  it('deals 7 face-up columns and empty cells', () => {
+    expect(s.tableau).toHaveLength(7);
+    expect(s.tableau.map((t) => t.length)).toEqual([8, 8, 8, 7, 7, 7, 7]);
     expect(s.tableau.flat()).toHaveLength(52);
     expect(s.cells).toHaveLength(4);
     expect(freecell.legalMoves(s).length).toBeGreaterThan(0);

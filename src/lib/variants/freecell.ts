@@ -7,7 +7,13 @@ const top = (p: readonly Card[]): Card | undefined => p[p.length - 1];
 const ref = (area: PileRef['area'], index = 0): PileRef => ({ area, index });
 
 const CELL_COUNT = 4;
-const COL_COUNT = 8;
+/**
+ * Mobile-first layout: 7 cascade columns (sizes 8,8,8,7,7,7,7) so cards
+ * stay readable on phones. Canonical FreeCell uses 8×(7,7,7,7,6,6,6,6);
+ * every deal is still solver-verified, so the solvability promise holds.
+ */
+const COL_COUNT = 7;
+const COL_SIZES = [8, 8, 8, 7, 7, 7, 7];
 
 function asFreeCell(s: GameState): FreeCellState {
   if (s.variant !== 'freecell') throw new Error(`expected freecell state, got ${s.variant}`);
@@ -15,15 +21,15 @@ function asFreeCell(s: GameState): FreeCellState {
 }
 
 /**
- * Initial FreeCell deal: all 52 cards face-up across 8 columns
- * (columns 0–3 get 7 cards, 4–7 get 6). Deterministic per `seed`.
+ * Initial deal: all 52 cards face-up across `COL_COUNT` columns
+ * per `COL_SIZES`. Deterministic per `seed`.
  */
 function initialState(seed: string): FreeCellState {
   const deck = shuffledDeck(seed);
   const tableau: Card[][] = [];
   let i = 0;
   for (let col = 0; col < COL_COUNT; col++) {
-    const size = col < 4 ? 7 : 6;
+    const size = COL_SIZES[col];
     tableau.push(deck.slice(i, i + size).map((c) => ({ ...c, faceUp: true })));
     i += size;
   }
@@ -83,7 +89,7 @@ function pileAt(s: FreeCellState, r: PileRef): readonly (Card | null)[] | null {
     case 'foundation':
       return r.index >= 0 && r.index < 4 ? s.foundations[r.index] : null;
     case 'tableau':
-      return r.index >= 0 && r.index < COL_COUNT ? s.tableau[r.index] : null;
+      return r.index >= 0 && r.index < s.tableau.length ? s.tableau[r.index] : null;
     default:
       return null;
   }

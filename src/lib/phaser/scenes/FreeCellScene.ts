@@ -1,6 +1,7 @@
 /**
  * FreeCell board scene. All 52 cards face-up: 4 free cells and 4
- * foundations on the top row, 8 cascades below. A tableau card is
+ * foundations on the top row (compact slots), 7 fat cascades below.
+ * A tableau card is
  * grabbable only when the run from it downward is a valid descending
  * alternating sequence; capacity is the engine's call on drop.
  */
@@ -143,9 +144,12 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
   private rebuildLayout(): void {
     this.layout = computeFreeCellLayout(this.scale.width, this.scale.height);
     for (const p of this.piles) p.dispose();
-    this.piles = this.layout.zones.map(
-      (z) => new Pile(this, z.ref, z.rect, z.anchor, this.layout.cardW, this.layout.cardH)
-    );
+    this.piles = this.layout.zones.map((z) => {
+      const isSlot = z.ref.area === 'cell' || z.ref.area === 'foundation';
+      const w = isSlot ? this.layout.slotW : this.layout.cardW;
+      const h = isSlot ? this.layout.slotH : this.layout.cardH;
+      return new Pile(this, z.ref, z.rect, z.anchor, w, h);
+    });
     if (this.current) this.syncState(this.current);
   }
 
@@ -192,7 +196,7 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
           y: L.tableauTop + L.cardH / 2 + i * L.upGap * k,
           depth: 300 + ci * 40 + i,
           interactive: isValidRun(col, i) ? ('drag' as const) : ('none' as const),
-          dealOrder: i * 8 + ci
+          dealOrder: i * 7 + ci
         });
       });
     });
@@ -223,7 +227,11 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
     if (deal) playSfx('shuffle');
     syncSprites(this, this.sprites, this.computeTargets(s), this.dragIds, deal);
     for (const spr of this.sprites.values()) {
-      spr.setDisplaySize(this.layout.cardW, this.layout.cardH);
+      const isSlot = spr.ref.area === 'cell' || spr.ref.area === 'foundation';
+      spr.setDisplaySize(
+        isSlot ? this.layout.slotW : this.layout.cardW,
+        isSlot ? this.layout.slotH : this.layout.cardH
+      );
     }
   }
 

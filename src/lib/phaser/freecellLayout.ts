@@ -1,7 +1,8 @@
 /**
- * Responsive board geometry for FreeCell. Eight uniform columns: the top
- * row holds 4 free cells (left) and 4 foundations (right); cascades run
- * below. Pure math — the scene positions sprites and drop zones from this.
+ * Responsive board geometry for FreeCell. Seven fat cascade columns so
+ * cards stay readable on phones; the top row (4 free cells + 4
+ * foundations) is laid out independently at a slightly smaller slot size —
+ * eight slots can't share the columns' width and keep cards big.
  */
 import Phaser from 'phaser';
 import type { PileRef } from '../engine/types.js';
@@ -13,10 +14,13 @@ export type { DropZone, Point };
 export type FreeCellLayout = {
   cardW: number;
   cardH: number;
+  /** Top-row slot width/height (smaller than tableau cards). */
+  slotW: number;
+  slotH: number;
   /** Top-row centers: cells[0..3] then foundations[0..3]. */
   cells: Point[];
   foundations: Point[];
-  /** Center x of each of the 8 cascade columns. */
+  /** Center x of each of the 7 cascade columns. */
   tableauX: number[];
   /** Top edge y of the cascade row (first card's top). */
   tableauTop: number;
@@ -28,7 +32,9 @@ export type FreeCellLayout = {
   zones: DropZone[];
 };
 
-const COLS = 8;
+const COLS = 7;
+/** Top row: 4 cells, a visual gap, then 4 foundations. */
+const TOP_SLOTS = 8;
 
 /**
  * Compute the FreeCell layout for a canvas of `width`×`height`.
@@ -37,34 +43,40 @@ const COLS = 8;
 export function computeFreeCellLayout(width: number, height: number): FreeCellLayout {
   const margin = Math.max(6, Math.min(20, width * 0.018));
   const gutter = Math.max(3, Math.min(12, width * 0.012));
-  const cardW = Math.min((width - 2 * margin - (COLS - 1) * gutter) / COLS, height * 0.15, 110);
+  const cardW = Math.min((width - 2 * margin - (COLS - 1) * gutter) / COLS, height * 0.17, 118);
   const cardH = cardW * 1.4;
   const boardW = COLS * cardW + (COLS - 1) * gutter;
   const startX = (width - boardW) / 2;
   const top = Math.max(8, height * 0.015);
   const colX = (i: number): number => startX + i * (cardW + gutter) + cardW / 2;
-  const topY = top + cardH / 2;
-  const rowGap = Math.max(8, height * 0.018);
-  const tableauTop = top + cardH + rowGap;
-  const inflate = cardW * 0.1;
 
-  const pileRect = (p: Point): Phaser.Geom.Rectangle =>
-    new Phaser.Geom.Rectangle(
-      p.x - cardW / 2 - inflate,
-      p.y - cardH / 2 - inflate,
-      cardW + inflate * 2,
-      cardH + inflate * 2
-    );
+  // Top row is its own grid: 8 slots sized to fit the same board width,
+  // grouped cells-left / foundations-right around a center gap.
+  const centerGap = cardW * 0.4;
+  const slotW = Math.min(cardW * 0.88, (boardW - 7 * gutter - centerGap) / TOP_SLOTS);
+  const slotH = slotW * 1.4;
+  const topY = top + slotH / 2;
+  const slotStep = slotW + gutter;
+  const leftEdge = startX;
+  const rightEdge = startX + boardW;
+  const cells = [0, 1, 2, 3].map((i) => ({ x: leftEdge + slotW / 2 + i * slotStep, y: topY }));
+  const foundations = [0, 1, 2, 3].map((i) => ({ x: rightEdge - slotW / 2 - (3 - i) * slotStep, y: topY }));
+
+  const rowGap = Math.max(8, height * 0.018);
+  const tableauTop = top + slotH + rowGap;
+  const inflate = cardW * 0.1;
+  const slotInflate = slotW * 0.1;
+
+  const pileRect = (p: Point, w: number, h: number, pad: number): Phaser.Geom.Rectangle =>
+    new Phaser.Geom.Rectangle(p.x - w / 2 - pad, p.y - h / 2 - pad, w + pad * 2, h + pad * 2);
 
   const zones: DropZone[] = [];
-  const cells = [0, 1, 2, 3].map((i) => ({ x: colX(i), y: topY }));
-  const foundations = [4, 5, 6, 7].map((i) => ({ x: colX(i), y: topY }));
 
   cells.forEach((p, i) =>
-    zones.push({ ref: { area: 'cell', index: i }, rect: pileRect(p), anchor: p })
+    zones.push({ ref: { area: 'cell', index: i }, rect: pileRect(p, slotW, slotH, slotInflate), anchor: p })
   );
   foundations.forEach((p, i) =>
-    zones.push({ ref: { area: 'foundation', index: i }, rect: pileRect(p), anchor: p })
+    zones.push({ ref: { area: 'foundation', index: i }, rect: pileRect(p, slotW, slotH, slotInflate), anchor: p })
   );
   for (let i = 0; i < COLS; i++) {
     zones.push({
@@ -82,6 +94,8 @@ export function computeFreeCellLayout(width: number, height: number): FreeCellLa
   return {
     cardW,
     cardH,
+    slotW,
+    slotH,
     cells,
     foundations,
     tableauX: Array.from({ length: COLS }, (_, i) => colX(i)),

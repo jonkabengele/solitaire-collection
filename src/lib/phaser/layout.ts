@@ -40,8 +40,8 @@ const COLS = 7;
  * Cards keep a 5:7 aspect; the board centers horizontally when capped.
  */
 export function computeLayout(width: number, height: number): BoardLayout {
-  const margin = Math.max(8, Math.min(24, width * 0.02));
-  const gutter = Math.max(4, Math.min(14, width * 0.014));
+  const margin = Math.max(6, Math.min(20, width * 0.018));
+  const gutter = Math.max(3, Math.min(12, width * 0.012));
   const cardW = Math.min(
     (width - 2 * margin - (COLS - 1) * gutter) / COLS,
     height * 0.17,

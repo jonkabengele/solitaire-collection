@@ -17,7 +17,7 @@ describe('isSolvable', () => {
   });
 
   it('confirms solvable FreeCell deals', () => {
-    expect(isSolvable(freecell, freecell.initialState('verify:6'), { budgetMs: 3000 })).toBe(true);
+    expect(isSolvable(freecell, freecell.initialState('fc7:1:0'), { budgetMs: 3000 })).toBe(true);
   });
 
   it('confirms solvable TriPeaks deals', () => {
