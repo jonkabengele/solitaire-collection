@@ -54,8 +54,10 @@ class RaceStore {
   myScore = $state(0);
   result = $state<RaceResult | null>(null);
   errorMsg = $state<string | null>(null);
-  /** Match id of a private race we created — the invite code. */
+  /** Match id of a private race we created. */
   inviteId = $state<string | null>(null);
+  /** 6-char share code for the private race we created. */
+  inviteCode = $state<string | null>(null);
 
   #socket: Socket | null = null;
   #match: Match | null = null;
@@ -100,25 +102,38 @@ class RaceStore {
     try {
       const { client, session } = await api();
       const res = await client.rpc(session, 'create_private_race', {});
-      const { matchId } = res.payload as { matchId: string };
+      const { matchId, code } = res.payload as { matchId: string; code: string };
       const { socket } = await connect();
       this.#socket = socket;
       this.#wireSocket(socket);
       this.#match = await socket.joinMatch(matchId);
       this.inviteId = matchId;
+      this.inviteCode = code;
       this.phase = 'matched';
     } catch (e) {
       this.#fail(e);
     }
   }
 
-  /** Join a private race from an invite code or `?race=` deep link. */
-  async joinPrivate(matchId: string): Promise<void> {
+  /**
+   * Join a private race — accepts a 6-char invite code, a `?race=` deep
+   * link payload, or (back-compat) a raw matchId containing a node suffix.
+   */
+  async joinPrivate(input: string): Promise<void> {
     if (this.phase === 'connecting' || this.phase === 'searching' || this.phase === 'matched') return;
     this.errorMsg = null;
     this.result = null;
     this.phase = 'connecting';
     try {
+      let matchId = input;
+      if (!input.includes('.')) {
+        // 6-char code → resolve through the server.
+        const { client, session } = await api();
+        const res = await client.rpc(session, 'join_private_race', { code: input.toUpperCase() });
+        const found = (res.payload as { matchId: string | null }).matchId;
+        if (!found) throw new Error(`No race found for code ${input.toUpperCase()}`);
+        matchId = found;
+      }
       const { socket } = await connect();
       this.#socket = socket;
       this.#wireSocket(socket);
@@ -286,6 +301,7 @@ class RaceStore {
     this.#match = null;
     this.#ticket = null;
     this.inviteId = null;
+    this.inviteCode = null;
     this.opponent = null;
     this.myScore = 0;
     this.secondsLeft = null;

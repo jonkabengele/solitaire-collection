@@ -82,6 +82,10 @@ declare namespace nk {
         version?: string;
       }[]
     ): unknown[];
+    storageRead(
+      keys: { collection: string; key: string; userId?: string }[]
+    ): { collection: string; key: string; userId: string; value: Record<string, unknown> }[];
+    storageDelete(keys: { collection: string; key: string; userId?: string }[]): void;
   }
 
   interface MatchmakerResult {

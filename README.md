@@ -69,9 +69,10 @@ On the same Nakama — no extra services:
 - **Race history** — per-player `race_history` storage objects holding both
   move logs, written at match end; the History tab replays either side
   through the deterministic engine (no snapshots stored).
-- **Private races** — lobby → "Create private race" → share `?race=<id>`
-  link; the friend joins from the link, paste-in box, or deep link.
-  Private lobbies wait 15 min for the second seat (vs 15 s matchmaking).
+- **Private races** — lobby → "Create private race" → share the 6-char
+  code or `?race=CODE` link (Web Share API with clipboard fallback);
+  `race_invites/{code}` maps code→match, released when the match ends.
+  Private lobbies wait 5 min for the second seat (vs 15 s matchmaking).
 - **Profile** — username + optional email link (identity upgrade; device
   auth stays the base identity).
 

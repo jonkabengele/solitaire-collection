@@ -43,6 +43,10 @@ function rpcCreatePrivateRace(ctx, logger, nk, payload) {
   return RaceEngine.rpcCreatePrivateRace(ctx, logger, nk, payload);
 }
 
+function rpcJoinPrivateRace(ctx, logger, nk, payload) {
+  return RaceEngine.rpcJoinPrivateRace(ctx, logger, nk, payload);
+}
+
 function InitModule(ctx, logger, nk, initializer) {
   initializer.registerMatch('race', {
     matchInit: matchInit,
@@ -55,5 +59,6 @@ function InitModule(ctx, logger, nk, initializer) {
   });
   initializer.registerMatchmakerMatched(raceMatchmakerMatched);
   initializer.registerRpc('create_private_race', rpcCreatePrivateRace);
+  initializer.registerRpc('join_private_race', rpcJoinPrivateRace);
   RaceEngine.setupLeaderboards(nk, logger);
 }

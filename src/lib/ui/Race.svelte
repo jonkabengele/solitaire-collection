@@ -8,13 +8,29 @@
   import { uiStore } from '../stores/ui.svelte.js';
 
   let joinCode = $state('');
-  let copied = $state(false);
 
   const inviteUrl = $derived(
-    raceStore.inviteId
-      ? `${location.origin}${location.pathname}?race=${encodeURIComponent(raceStore.inviteId)}`
+    raceStore.inviteCode
+      ? `${location.origin}${location.pathname}?race=${raceStore.inviteCode}`
       : ''
   );
+
+  const shareText = $derived(
+    `Race me in Solitaire! Same deal, 5 minutes — code ${raceStore.inviteCode ?? ''} or ${inviteUrl}`
+  );
+
+  /** navigator.share (mobile share sheet) → clipboard fallback. */
+  async function share(): Promise<void> {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Solitaire Race', text: shareText, url: inviteUrl });
+        return;
+      }
+    } catch {
+      return; // user dismissed the share sheet
+    }
+    await copyInvite();
+  }
 
   /** Accepts a bare match id or a full invite link — extract `?race=` when given a URL. */
   function joinWith(raw: string): void {
@@ -24,14 +40,20 @@
     void raceStore.joinPrivate(m ? decodeURIComponent(m[1]) : t);
   }
 
-  async function copyInvite(): Promise<void> {
+  let copiedWhat = $state<'code' | 'link' | null>(null);
+
+  async function copyText(text: string, what: 'code' | 'link'): Promise<void> {
     try {
-      await navigator.clipboard.writeText(inviteUrl);
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
+      await navigator.clipboard.writeText(text);
+      copiedWhat = what;
+      setTimeout(() => (copiedWhat = null), 1500);
     } catch {
-      /* clipboard blocked — the link is visible to copy manually */
+      /* clipboard blocked — text is visible to copy manually */
     }
+  }
+
+  async function copyInvite(): Promise<void> {
+    await copyText(inviteUrl, 'link');
   }
 
   function fmtClock(s: number | null): string {
@@ -111,13 +133,21 @@
               ? 'Connecting…'
               : raceStore.phase === 'matched'
                 ? raceStore.inviteId
-                  ? 'Share this link — the race starts when they join.'
+                  ? 'Share the code or link — the race starts when they join.'
                   : 'Joining the race…'
                 : 'Searching for an opponent…'}
           </p>
-          {#if raceStore.inviteId}
-            <code class="invite">{inviteUrl}</code>
-            <button class="btn" onclick={copyInvite}>{copied ? 'Copied!' : 'Copy invite'}</button>
+          {#if raceStore.inviteCode}
+            <div class="code" aria-label="Race code">{raceStore.inviteCode}</div>
+            <div class="row">
+              <button class="btn primary" onclick={share}>↗ Share</button>
+              <button class="btn" onclick={() => void copyText(raceStore.inviteCode!, 'code')}>
+                {copiedWhat === 'code' ? 'Copied!' : 'Copy code'}
+              </button>
+              <button class="btn" onclick={copyInvite}>
+                {copiedWhat === 'link' ? 'Copied!' : 'Copy link'}
+              </button>
+            </div>
           {/if}
           <button class="btn" onclick={cancel}>Cancel</button>
         </div>
@@ -281,14 +311,18 @@
     gap: 0.5rem;
   }
 
-  .invite {
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    font-size: 0.68rem;
+  .code {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: 0.35em;
+    text-indent: 0.35em; /* optical centering vs letter-spacing */
     color: #ffd166;
-    background: rgba(0, 0, 0, 0.25);
-    border-radius: 8px;
-    padding: 0.4rem 0.6rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px dashed rgba(255, 209, 102, 0.45);
+    border-radius: 12px;
+    padding: 0.5rem 1rem;
+    font-variant-numeric: tabular-nums;
+    user-select: all;
   }
 
   .divider {

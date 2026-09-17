@@ -27,6 +27,8 @@ interface ServerState {
   m: MatchState;
   /** ms timestamp when OP_END was broadcast; match tears down shortly after. */
   endBroadcastAt: number;
+  /** Private-race invite code (system-owned `race_invites` object), if any. */
+  inviteCode: string | null;
 }
 
 function broadcastStart(d: nk.Dispatcher, m: MatchState, now: number): void {
@@ -60,8 +62,13 @@ export function matchInit(_ctx: nk.Context, logger: nk.Logger, nk: nk.Nakama, pa
   const seed = found.solved ? found.seed : nk.uuidv4();
   logger.info('race match init: variant=%s seed=%s solvable=%s attempts=%d private=%s', variant, seed, found.solved, found.attempts, isPrivate);
   const lobbyTimeout = isPrivate ? PRIVATE_LOBBY_TIMEOUT_MS : undefined;
+  const inviteCode = typeof params['code'] === 'string' ? params['code'] : null;
   return {
-    state: { m: createMatch(seed, variant, Date.now(), lobbyTimeout), endBroadcastAt: 0 } as ServerState,
+    state: {
+      m: createMatch(seed, variant, Date.now(), lobbyTimeout),
+      endBroadcastAt: 0,
+      inviteCode
+    } as ServerState,
     tickRate: 5,
     label: `race:${variant}`
   };
@@ -180,6 +187,7 @@ export function matchLoop(
     state.endBroadcastAt = now;
     logger.info('race ended: winner=%s reason=%s', ev.winnerId, ev.reason);
     recordResult(nk, logger, state.m, ev.winnerId, ev.reason ?? 'draw', ctx.matchId);
+    releaseInvite(nk, logger, state);
   }
   // Tear down shortly after the end broadcast so it reliably lands.
   if (state.m.phase === 'ended' && state.endBroadcastAt !== 0 && now - state.endBroadcastAt > 2000) {
@@ -215,19 +223,82 @@ export function matchmakerMatched(_ctx: nk.Context, _logger: nk.Logger, nk: nk.N
   return nk.matchCreate('race', { variant: 'klondike' });
 }
 
+/** Unambiguous invite alphabet — no 0/O, 1/I/L to misread. */
+const INVITE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const INVITE_COLLECTION = 'race_invites';
+
+/** Derive a 6-char code from uuid entropy (two nibbles → alphabet index). */
+function makeInviteCode(nk: nk.Nakama): string {
+  const hex = nk.uuidv4().replace(/-/g, '');
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += INVITE_ALPHABET[parseInt(hex[i], 16) * 2];
+  }
+  return code;
+}
+
 /**
- * RPC 'create_private_race' → matchId. The creator joins it directly with
- * joinMatch(matchId); the invite link carries the same id to the friend.
- * Private matches skip the matchmaker entirely.
+ * RPC 'create_private_race' → { matchId, code }. The creator joins directly
+ * with joinMatch(matchId); friends join via the 6-char code ('join_private_race')
+ * or the ?race=CODE deep link. The code→match mapping is a system-owned
+ * storage object the match deletes when it ends or aborts.
  */
 export function rpcCreatePrivateRace(
   ctx: nk.Context,
-  _logger: nk.Logger,
+  logger: nk.Logger,
   nk: nk.Nakama,
   _payload: string
 ): string {
-  const matchId = nk.matchCreate('race', { variant: 'klondike', private: true });
-  return JSON.stringify({ matchId, host: ctx.userId ?? null });
+  const host = ctx.userId ?? null;
+  // Retry on code collision — the key space is huge so this almost never loops.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const code = makeInviteCode(nk);
+    const existing = nk.storageRead([{ collection: INVITE_COLLECTION, key: code }]);
+    if (existing.length > 0) continue;
+    const matchId = nk.matchCreate('race', { variant: 'klondike', private: true, code });
+    nk.storageWrite([
+      {
+        collection: INVITE_COLLECTION,
+        key: code,
+        value: { matchId, host, createdAt: Date.now() },
+        permissionRead: 2,
+        permissionWrite: 0
+      }
+    ]);
+    logger.info('private race created: code=%s match=%s', code, matchId);
+    return JSON.stringify({ matchId, code, host });
+  }
+  throw new Error('could not allocate an invite code');
+}
+
+/** RPC 'join_private_race' { code } → { matchId } | { matchId: null }. */
+export function rpcJoinPrivateRace(
+  _ctx: nk.Context,
+  _logger: nk.Logger,
+  nk: nk.Nakama,
+  payload: string
+): string {
+  let code = '';
+  try {
+    code = String((JSON.parse(payload) as { code?: string }).code ?? '').toUpperCase().trim();
+  } catch {
+    code = '';
+  }
+  if (!/^[A-Z2-9]{6}$/.test(code)) return JSON.stringify({ matchId: null });
+  const found = nk.storageRead([{ collection: INVITE_COLLECTION, key: code }]);
+  const matchId = found.length > 0 ? ((found[0].value as { matchId?: string }).matchId ?? null) : null;
+  return JSON.stringify({ matchId });
+}
+
+/** Drop a private match's invite once the race ends/aborts. */
+function releaseInvite(nk: nk.Nakama, logger: nk.Logger, state: ServerState): void {
+  if (!state.inviteCode) return;
+  try {
+    nk.storageDelete([{ collection: INVITE_COLLECTION, key: state.inviteCode }]);
+    state.inviteCode = null;
+  } catch (e) {
+    logger.warn('invite cleanup failed: %s', e);
+  }
 }
 
 /** Called once from InitModule — creates the race leaderboards (idempotent). */
@@ -257,6 +328,7 @@ function recordResult(
   reason: string,
   matchId: string
 ): void {
+  if (reason === 'abort') return; // a lobby that never started isn't history
   try {
     const players = Object.values(m.players);
     if (winnerId !== null) {

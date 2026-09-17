@@ -35,15 +35,20 @@ export interface HistoryEntry {
   oppMoves: Move[];
 }
 
+interface RawHistorySide {
+  userId?: string;
+  username?: string;
+  score?: number;
+}
+
+/** Shape written by `recordResult` in server/core.ts. */
 interface RawHistory {
   variant?: string;
   seed?: string;
   outcome?: string;
-  myScore?: number;
-  oppScore?: number;
-  opponentName?: string;
-  opponentId?: string;
-  playedAt?: number;
+  endedAt?: number;
+  me?: RawHistorySide;
+  opp?: RawHistorySide | null;
   myMoves?: Move[];
   oppMoves?: Move[];
 }
@@ -58,11 +63,11 @@ function toHistory(o: StorageObject): HistoryEntry | null {
     variant: (v.variant ?? 'klondike') as VariantId,
     seed: v.seed,
     outcome: (v.outcome ?? 'lost') as HistoryEntry['outcome'],
-    myScore: v.myScore ?? 0,
-    oppScore: v.oppScore ?? 0,
-    opponentName: v.opponentName ?? 'opponent',
-    opponentId: v.opponentId ?? '',
-    playedAt: v.playedAt ?? 0,
+    myScore: v.me?.score ?? 0,
+    oppScore: v.opp?.score ?? 0,
+    opponentName: v.opp?.username ?? 'opponent',
+    opponentId: v.opp?.userId ?? '',
+    playedAt: v.endedAt ?? 0,
     myMoves: v.myMoves,
     oppMoves: v.oppMoves ?? []
   };
