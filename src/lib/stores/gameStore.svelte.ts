@@ -19,7 +19,7 @@ import { statsStore } from './stats.svelte.js';
 /** Listener invoked with the new state after every committed change. */
 export type StateListener = (state: GameState) => void;
 
-/** Navigation targets the router understands: a variant board or the menu. */
+/** Navigation targets: a variant board scene or the DOM menu overlay. */
 export type NavTarget = 'menu' | VariantId;
 
 type NavListener = (target: NavTarget) => void;
@@ -31,26 +31,34 @@ type HintListener = (move: Move | null) => void;
 type Slot = { state: GameState; elapsedMs: number };
 
 class GameStore {
-  // The boot deal is solver-verified too — any state a player can reach
-  // is solvable (spec §Phase 5). One bounded sync solve at startup; the
-  // worker refills the cache in the background afterwards.
-  #state = $state<GameState>({
-    ...getVariant('klondike').initialState(solvableSeed('klondike')),
-    startedAt: Date.now()
-  });
+  // No game exists until the player picks a variant from the menu — the
+  // DOM menu boots with zero engine work (no synchronous solve on load).
+  // Every deal remains solver-verified: the first `selectVariant` deals
+  // via `solvableSeed` while the Phaser bundle + card assets load.
+  #state = $state<GameState | null>(null);
   #pendingSwitch = $state<VariantId | null>(null);
   #redoLog: Move[] = [];
   #playedSeeds = new Set<string>();
   #wonSeeds = new Set<string>();
   #autoTimer: ReturnType<typeof setInterval> | null = null;
-  readonly #slots: Partial<Record<VariantId, Slot>> = {};
+  readonly #slots = $state<Partial<Record<VariantId, Slot>>>({});
   readonly #listeners = new Set<StateListener>();
   readonly #navListeners = new Set<NavListener>();
   readonly #hintListeners = new Set<HintListener>();
 
-  /** The canonical game state. Never mutated in place. */
+  /**
+   * The canonical game state. Never mutated in place. Only readable once
+   * a game exists — i.e. after the first `selectVariant`/`newGame` — so
+   * the pre-game menu never pays for a solver run.
+   */
   get state(): GameState {
+    if (this.#state === null) throw new Error('no game started yet');
     return this.#state;
+  }
+
+  /** `true` once any variant has been started. */
+  get started(): boolean {
+    return this.#state !== null;
   }
 
   /** Variant id awaiting a "Save and switch?" decision, or null. */
@@ -60,12 +68,12 @@ class GameStore {
 
   /** The variant driving the current state. */
   get variant(): Variant {
-    return getVariant(this.#state.variant);
+    return getVariant(this.state.variant);
   }
 
   /** `true` when the move log is non-empty (undo is meaningful). */
   get canUndo(): boolean {
-    return this.#state.moves.length > 0;
+    return this.state.moves.length > 0;
   }
 
   /** `true` when an undone move can be re-applied. */
@@ -80,7 +88,7 @@ class GameStore {
    * Klondike, where foundation→tableau take-backs stay legal forever.)
    */
   get canAutoComplete(): boolean {
-    const s = this.#state;
+    const s = this.state;
     if (s.status !== 'playing' || s.variant === 'tripeaks') return false;
     const v = this.variant;
     let cur: GameState = s;
@@ -96,12 +104,12 @@ class GameStore {
 
   /** Number of committed moves. */
   get moveCount(): number {
-    return this.#state.moves.length;
+    return this.state.moves.length;
   }
 
   /** `true` when the live game has progress worth saving on switch. */
   get inProgress(): boolean {
-    return this.#state.status === 'playing' && this.#state.moves.length > 0;
+    return this.state.status === 'playing' && this.state.moves.length > 0;
   }
 
   /** `true` when a suspended game exists for `id` (menu "continue" chip). */
@@ -110,13 +118,26 @@ class GameStore {
   }
 
   /**
+   * `true` when `id` has an in-progress game — suspended, or the live one.
+   * Safe to call before any game exists (never touches `state`).
+   */
+  hasInProgress(id: VariantId): boolean {
+    const s = this.#state;
+    return (
+      (s !== null && s.variant === id && s.status === 'playing' && s.moves.length > 0) ||
+      this.#slots[id] !== undefined
+    );
+  }
+
+  /**
    * Deal a new game. `seed` defaults to a fresh random seed; passing one
    * replays a known deal (multiplayer-ready: same seed → same deck).
    * A fresh deal for `variantId` discards that variant's suspended game.
    */
-  newGame(variantId: VariantId = this.#state.variant, seed?: string): void {
+  newGame(variantId: VariantId = this.#state?.variant ?? 'klondike', seed?: string): void {
     // Abandoning an in-progress game via New counts as a loss for streaks.
     if (
+      this.#state !== null &&
       variantId === this.#state.variant &&
       this.#state.status === 'playing' &&
       this.#state.moves.length > 0
@@ -136,7 +157,7 @@ class GameStore {
    * is saved implicitly — there is nothing worth losing).
    */
   requestSwitch(id: VariantId): void {
-    if (id === this.#state.variant) return;
+    if (this.#state === null || id === this.#state.variant) return;
     if (this.inProgress) this.#pendingSwitch = id;
     else this.switchVariant(id, true);
   }
@@ -161,7 +182,7 @@ class GameStore {
     this.switchVariant(id, true);
   }
 
-  /** Ask the router to show the menu. The live game stays in `#state`. */
+  /** Ask the UI to show the menu overlay. The live game stays in `#state`. */
   openMenu(): void {
     this.#emitNav('menu');
   }
@@ -171,8 +192,8 @@ class GameStore {
    * when the engine rejected it (illegal move → same object back).
    */
   dispatchMove(move: Move): boolean {
-    const next = applyMove(this.#state, move);
-    if (next === this.#state) return false;
+    const next = applyMove(this.state, move);
+    if (next === this.state) return false;
     this.#redoLog = [];
     this.#commit(this.#stamp(next));
     return true;
@@ -183,7 +204,7 @@ class GameStore {
    * `initialState` + `applyMove`. Pure and deterministic by construction.
    */
   undo(): void {
-    const s = this.#state;
+    const s = this.state;
     if (s.moves.length === 0) return;
     let rebuilt = this.variant.initialState(s.seed);
     for (const m of s.moves.slice(0, -1)) rebuilt = applyMove(rebuilt, m);
@@ -195,8 +216,8 @@ class GameStore {
   redo(): void {
     const m = this.#redoLog[this.#redoLog.length - 1];
     if (!m) return;
-    const next = applyMove(this.#state, m);
-    if (next === this.#state) return;
+    const next = applyMove(this.state, m);
+    if (next === this.state) return;
     this.#redoLog = this.#redoLog.slice(0, -1);
     this.#commit(this.#stamp(next));
   }
@@ -207,7 +228,7 @@ class GameStore {
    * Emitted on the hint channel for the active scene to highlight.
    */
   requestHint(): void {
-    if (this.#state.status !== 'playing') {
+    if (this.state.status !== 'playing') {
       this.#emitHint(null);
       return;
     }
@@ -251,7 +272,7 @@ class GameStore {
 
   /** All legal moves in the current position (used for double-tap autofinish, later for hints). */
   legalMoves(): Move[] {
-    return this.variant.legalMoves(this.#state);
+    return this.variant.legalMoves(this.state);
   }
 
   /**
@@ -264,8 +285,9 @@ class GameStore {
   }
 
   /**
-   * Subscribe to navigation requests (menu / variant boards). The Phaser
-   * router translates these into scene transitions. Returns unsubscribe.
+   * Subscribe to navigation requests (menu / variant boards). `App.svelte`
+   * translates these into scene transitions + the menu overlay. Returns
+   * unsubscribe.
    */
   onNavigate(fn: NavListener): () => void {
     this.#navListeners.add(fn);
@@ -279,14 +301,16 @@ class GameStore {
    */
   private switchVariant(id: VariantId, saveCurrent: boolean): void {
     const cur = this.#state;
-    if (cur.variant === id) {
+    if (cur !== null && cur.variant === id) {
       this.#emitNav(id);
       return;
     }
-    this.#slots[cur.variant] =
-      saveCurrent && cur.status === 'playing' && cur.moves.length > 0
-        ? { state: cur, elapsedMs: Date.now() - cur.startedAt }
-        : undefined;
+    if (cur !== null) {
+      this.#slots[cur.variant] =
+        saveCurrent && cur.status === 'playing' && cur.moves.length > 0
+          ? { state: cur, elapsedMs: Date.now() - cur.startedAt }
+          : undefined;
+    }
     const saved = this.#slots[id];
     this.#slots[id] = undefined;
     this.#redoLog = [];
@@ -305,7 +329,7 @@ class GameStore {
 
   /** Stamp wall-clock fields the engine deliberately leaves alone. */
   #stamp(s: GameState): GameState {
-    if (s.status !== 'playing' && this.#state.status === 'playing') {
+    if (s.status !== 'playing' && this.#state?.status === 'playing') {
       return { ...s, elapsedMs: Date.now() - s.startedAt };
     }
     return s;
@@ -319,11 +343,11 @@ class GameStore {
       this.#playedSeeds.add(key);
       statsStore.recordPlayed(s.variant);
     }
-    if (prev.status === 'playing' && s.status === 'won' && !this.#wonSeeds.has(key)) {
+    if (prev?.status === 'playing' && s.status === 'won' && !this.#wonSeeds.has(key)) {
       this.#wonSeeds.add(key);
       statsStore.recordWin(s.variant, s.elapsedMs);
     }
-    if (prev.status === 'playing' && s.status === 'lost') {
+    if (prev?.status === 'playing' && s.status === 'lost') {
       statsStore.recordLoss(s.variant);
     }
     for (const fn of this.#listeners) fn(s);
@@ -341,9 +365,12 @@ class GameStore {
 /** The singleton store — one canonical game at a time. */
 export const gameStore = new GameStore();
 
-// Dev-only handle for E2E tests and console debugging — tree-shaken out of prod builds.
-if (import.meta.env.DEV) {
+// Dev/E2E-only handle for tests and console debugging — absent from
+// normal production builds (VITE_E2E is only set for e2e builds).
+if (import.meta.env.DEV || import.meta.env.VITE_E2E === 'true') {
   const w = window as unknown as Record<string, unknown>;
   w.__solitaire = gameStore;
   w.__solver = { solve, isSolvable, getVariant };
+  import('./ui.svelte.js').then(({ uiStore }) => (w.__ui = uiStore));
+  import('./install.svelte.js').then(({ installStore }) => (w.__install = installStore));
 }

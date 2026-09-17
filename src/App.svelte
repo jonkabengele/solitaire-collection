@@ -1,26 +1,92 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import type Phaser from 'phaser';
   import HUD from './lib/ui/HUD.svelte';
+  import Menu from './lib/ui/Menu.svelte';
   import Stats from './lib/ui/Stats.svelte';
-  import { createGame } from './lib/phaser/game.js';
+  import InstallBanner from './lib/ui/InstallBanner.svelte';
   import { uiStore } from './lib/stores/ui.svelte.js';
+  import { gameStore, type NavTarget } from './lib/stores/gameStore.svelte.js';
+  import { installStore } from './lib/stores/install.svelte.js';
 
   let gameEl!: HTMLDivElement;
+  let game: Phaser.Game | null = null;
+  let booting: Promise<Phaser.Game> | null = null;
+
+  // Install prompt: suggest once, right after the player's first win.
+  $effect(() => {
+    if (gameStore.started && gameStore.state.status === 'won') installStore.suggestAfterWin();
+  });
+
+  /**
+   * Phaser loads lazily on the first variant pick — the menu is pure DOM,
+   * so boot stays fast and the 1.4MB engine chunk stays off the critical
+   * path. The promise is memoized so rapid nav events share one game.
+   */
+  function ensureGame(): Promise<Phaser.Game> {
+    if (game) return Promise.resolve(game);
+    booting ??= import('./lib/phaser/game.js').then(({ createGame }) => {
+      game = createGame(gameEl);
+      return game;
+    });
+    return booting;
+  }
+
+  /** Currently-running board scene, if any (boot excluded). */
+  function boardScene(g: Phaser.Game): Phaser.Scene | undefined {
+    return g.scene.getScenes(true).find((s) => s.scene.key !== 'boot');
+  }
+
+  /**
+   * Navigation: 'menu' stops the board scene under the overlay; a variant
+   * starts (or restarts) its scene. If boot is still preloading, BootScene
+   * reads `gameStore.state.variant` and lands on the right board itself.
+   */
+  async function onNav(t: NavTarget): Promise<void> {
+    if (t === 'menu') {
+      uiStore.menuOpen = true;
+      if (game) {
+        const s = boardScene(game);
+        if (s) game.scene.stop(s.scene.key);
+      }
+      return;
+    }
+    uiStore.menuOpen = false;
+    const g = await ensureGame();
+    const scenes = g.scene.getScenes(true);
+    if (scenes.some((s) => s.scene.key === 'boot')) return; // boot handles it
+    const board = boardScene(g);
+    if (!board) g.scene.start(t);
+    else if (board.scene.key !== t) board.scene.start(t);
+  }
 
   onMount(() => {
-    const game = createGame(gameEl);
-    return () => game.destroy(true);
+    const offNav = gameStore.onNavigate((t) => void onNav(t));
+    return () => {
+      offNav();
+      game?.destroy(true);
+      game = null;
+      booting = null;
+    };
   });
 </script>
 
 <main class="shell">
-  <HUD />
+  {#if !uiStore.menuOpen}
+    <HUD />
+  {/if}
   <div class="game" bind:this={gameEl}></div>
 </main>
+
+{#if uiStore.menuOpen}
+  <Menu />
+{/if}
 
 {#if uiStore.statsOpen}
   <Stats />
 {/if}
+
+<InstallBanner />
 
 <style>
   .shell {

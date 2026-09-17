@@ -1,10 +1,11 @@
 /**
  * Loads generated card SVGs (rasterized at 2× for HiDPI) with a minimal
- * progress bar, then starts the Klondike scene. Audio stubs are silent
- * in Phase 2 (real CC0 samples land in Phase 4).
+ * progress bar, then starts whichever variant the player picked — the
+ * menu is DOM, so boot lands straight on a board scene.
  */
 import Phaser from 'phaser';
 import { createDeck } from '../../engine/deck.js';
+import { gameStore } from '../../stores/gameStore.svelte.js';
 
 const TEX_W = 280;
 const TEX_H = 392;
@@ -36,6 +37,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.scene.start('menu');
+    this.scene.start(gameStore.state.variant);
   }
 }

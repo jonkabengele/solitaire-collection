@@ -6,7 +6,12 @@ export default defineConfig({
   plugins: [
     svelte(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' keeps workbox's default waiting lifecycle: a new SW
+      // installs in the background, activates only after every tab closes
+      // → updates apply on next launch, never mid-game (spec §Phase 6).
+      // ('autoUpdate' would force skipWaiting+clientsClaim, hijacking a
+      // live session.) We never render the prompt UI; launch is the prompt.
+      registerType: 'prompt',
       includeAssets: ['icons/*.png'],
       manifest: {
         name: 'Solitaire Collection',
@@ -46,7 +51,10 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,mp3,ogg,wav,woff,woff2}'],
         // Phaser is a large dependency; allow big precache entries.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        navigateFallback: 'index.html'
+        navigateFallback: 'index.html',
+        // Spec §Phase 6: updates apply on next launch, never mid-game.
+        skipWaiting: false,
+        clientsClaim: false
       }
     })
   ],

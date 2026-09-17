@@ -4,6 +4,8 @@
  * is the bridge). Kept separate from gameStore — it's chrome, not game.
  */
 class UiStore {
+  /** Menu is the boot screen — open until a variant is picked. */
+  menuOpen = $state(true);
   statsOpen = $state(false);
   aboutOpen = $state(false);
 }
