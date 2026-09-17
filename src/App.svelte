@@ -5,6 +5,7 @@
   import Menu from './lib/ui/Menu.svelte';
   import Stats from './lib/ui/Stats.svelte';
   import About from './lib/ui/About.svelte';
+  import Race from './lib/ui/Race.svelte';
   import InstallBanner from './lib/ui/InstallBanner.svelte';
   import { uiStore } from './lib/stores/ui.svelte.js';
   import { gameStore, type NavTarget } from './lib/stores/gameStore.svelte.js';
@@ -90,6 +91,8 @@
 {#if uiStore.aboutOpen}
   <About />
 {/if}
+
+<Race />
 
 <InstallBanner />
 

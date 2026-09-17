@@ -56,6 +56,7 @@
   </div>
 
   <div class="footer">
+    <button class="race-link" onclick={() => (uiStore.raceOpen = true)}>⚔ RACE</button>
     <button class="stats-link" onclick={() => (uiStore.statsOpen = true)}>STATISTICS</button>
     <button class="stats-link" onclick={() => (uiStore.aboutOpen = true)}>ABOUT</button>
   </div>
@@ -196,6 +197,19 @@
     font: inherit;
     font-size: 0.8rem;
     font-weight: 700;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+  }
+
+  .race-link {
+    padding: 0.7rem 1.1rem;
+    border: 0;
+    border-radius: 10px;
+    background: #ffd166;
+    color: #0b3d2e;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 800;
     letter-spacing: 0.2em;
     cursor: pointer;
   }
