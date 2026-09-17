@@ -1,8 +1,20 @@
 import { defineConfig } from 'vite';
+import { readFileSync } from 'node:fs';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
+
 export default defineConfig({
+  // BASE_PATH lets a deploy target host under a subpath (e.g. GitHub Pages
+  // project sites live at /<repo>/); local dev stays at '/'.
+  base: process.env.BASE_PATH ?? '/',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __REPO_URL__: JSON.stringify(process.env.REPO_URL ?? '')
+  },
   plugins: [
     svelte(),
     VitePWA({

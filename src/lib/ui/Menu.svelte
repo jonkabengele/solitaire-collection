@@ -55,7 +55,10 @@
     {/each}
   </div>
 
-  <button class="stats-link" onclick={() => (uiStore.statsOpen = true)}>STATISTICS</button>
+  <div class="footer">
+    <button class="stats-link" onclick={() => (uiStore.statsOpen = true)}>STATISTICS</button>
+    <button class="stats-link" onclick={() => (uiStore.aboutOpen = true)}>ABOUT</button>
+  </div>
 </div>
 
 <style>
@@ -177,6 +180,11 @@
     font-size: 0.62rem;
     font-weight: 700;
     letter-spacing: 0.06em;
+  }
+
+  .footer {
+    display: flex;
+    gap: 0.6rem;
   }
 
   .stats-link {
