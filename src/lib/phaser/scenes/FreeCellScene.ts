@@ -11,7 +11,7 @@ import { computeFreeCellLayout, type FreeCellLayout } from '../freecellLayout.js
 import { CardSprite } from '../objects/CardSprite.js';
 import { Pile } from '../objects/Pile.js';
 import { DragController, type DragHost } from '../objects/DragController.js';
-import { syncSprites, type Target } from '../objects/spriteSync.js';
+import { syncSprites, shakeCard, type Target } from '../objects/spriteSync.js';
 import { SwipeController } from '../objects/SwipeController.js';
 import { hintFx, type HintRect } from '../objects/hintFx.js';
 import { bindSfx, playSfx } from '../sfx.js';
@@ -96,6 +96,7 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
         (m) => m.type === 'move' && m.cardId === sprite.cardId && m.to.area === 'foundation'
       );
     if (move) this.tryMove(move);
+    else shakeCard(this, sprite);
   }
 
   resync(): void {

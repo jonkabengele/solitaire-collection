@@ -27,12 +27,10 @@ export interface DragHost {
 
 const TAP_MAX_DIST = 12;
 const TAP_MAX_MS = 400;
-const DBL_TAP_MS = 400;
 
 export class DragController {
   private group: CardSprite[] = [];
   private offsets: { x: number; y: number }[] = [];
-  private lastTap = { id: '', at: 0 };
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -42,7 +40,9 @@ export class DragController {
     scene.input.on(ev.DRAG_START, this.onDragStart, this);
     scene.input.on(ev.DRAG, this.onDrag, this);
     scene.input.on(ev.DRAG_END, this.onDragEnd, this);
-    scene.input.on(ev.GAMEOBJECT_POINTER_UP, this.onPointerUp, this);
+    // Phaser 4: the gameobject-level pointer-up event is GAMEOBJECT_UP
+    // ('gameobjectup'); the v3 name GAMEOBJECT_POINTER_UP doesn't exist.
+    scene.input.on(ev.GAMEOBJECT_UP, this.onPointerUp, this);
   }
 
   /** Detach all listeners (scene shutdown). */
@@ -51,7 +51,7 @@ export class DragController {
     this.scene.input.off(ev.DRAG_START, this.onDragStart, this);
     this.scene.input.off(ev.DRAG, this.onDrag, this);
     this.scene.input.off(ev.DRAG_END, this.onDragEnd, this);
-    this.scene.input.off(ev.GAMEOBJECT_POINTER_UP, this.onPointerUp, this);
+    this.scene.input.off(ev.GAMEOBJECT_UP, this.onPointerUp, this);
   }
 
   private onDragStart(
@@ -101,17 +101,11 @@ export class DragController {
     }
   }
 
-  /** Tap detection → double-tap sends a card to a foundation when legal. */
+  /** Tap detection → a quick tap sends the card to its foundation when legal. */
   private onPointerUp(pointer: Phaser.Input.Pointer, go: Phaser.GameObjects.GameObject): void {
     if (!(go instanceof CardSprite)) return;
     if (pointer.getDistance() > TAP_MAX_DIST) return;
     if (pointer.upTime - pointer.downTime > TAP_MAX_MS) return;
-    const now = this.scene.time.now;
-    if (this.lastTap.id === go.cardId && now - this.lastTap.at < DBL_TAP_MS) {
-      this.lastTap = { id: '', at: 0 };
-      this.host.tryAutoFoundation(go);
-    } else {
-      this.lastTap = { id: go.cardId, at: now };
-    }
+    this.host.tryAutoFoundation(go);
   }
 }

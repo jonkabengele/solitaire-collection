@@ -41,6 +41,7 @@ class GameStore {
   #playedSeeds = new Set<string>();
   #wonSeeds = new Set<string>();
   #autoTimer: ReturnType<typeof setInterval> | null = null;
+  #autoDelay: ReturnType<typeof setTimeout> | null = null;
   readonly #slots = $state<Partial<Record<VariantId, Slot>>>({});
   readonly #listeners = new Set<StateListener>();
   readonly #navListeners = new Set<NavListener>();
@@ -252,6 +253,8 @@ class GameStore {
   /**
    * Auto-finish: when `canAutoComplete`, dispatch one foundation move every
    * 140ms so cards visibly fly home. Stops when no foundation move remains.
+   * Triggered automatically from `#commit` — no button press needed; the
+   * delay lets the triggering move's place animation land first.
    */
   autoComplete(): void {
     if (!this.canAutoComplete || this.#autoTimer) return;
@@ -263,10 +266,22 @@ class GameStore {
     }, 140);
   }
 
+  #startAutoSoon(): void {
+    if (this.#autoTimer || this.#autoDelay) return;
+    this.#autoDelay = setTimeout(() => {
+      this.#autoDelay = null;
+      this.autoComplete();
+    }, 450);
+  }
+
   #stopAuto(): void {
     if (this.#autoTimer) {
       clearInterval(this.#autoTimer);
       this.#autoTimer = null;
+    }
+    if (this.#autoDelay) {
+      clearTimeout(this.#autoDelay);
+      this.#autoDelay = null;
     }
   }
 
@@ -351,6 +366,8 @@ class GameStore {
       statsStore.recordLoss(s.variant);
     }
     for (const fn of this.#listeners) fn(s);
+    // Only trivial foundation progress left → finish automatically.
+    if (this.canAutoComplete) this.#startAutoSoon();
   }
 
   #emitNav(t: NavTarget): void {

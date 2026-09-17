@@ -59,17 +59,22 @@
     <span>{fmt(elapsed)}</span>
   </div>
   <div class="actions">
-    {#if gameStore.canAutoComplete}
-      <button class="accent" onclick={() => gameStore.autoComplete()}>Finish</button>
-    {/if}
-    <button onclick={() => gameStore.requestHint()} disabled={cur.status !== 'playing'}>Hint</button>
-    <button onclick={() => gameStore.undo()} disabled={!gameStore.canUndo}>Undo</button>
-    <button onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>Redo</button>
-    <button onclick={() => gameStore.newGame()}>New</button>
+    <button class="wide" onclick={() => gameStore.requestHint()} disabled={cur.status !== 'playing'}>Hint</button>
+    <button class="wide" onclick={() => gameStore.undo()} disabled={!gameStore.canUndo}>Undo</button>
+    <button class="wide" onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>Redo</button>
+    <button class="wide" onclick={() => gameStore.newGame()}>New</button>
     <button class="ghost" title="Statistics" aria-label="Statistics" onclick={() => (uiStore.statsOpen = true)}>📊</button>
     <button class="ghost" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>⚙</button>
   </div>
 </header>
+
+<!-- Thumb bar: icon-only game actions, bottom edge on small screens. -->
+<nav class="actionbar" aria-label="Game actions">
+  <button aria-label="Undo" title="Undo" onclick={() => gameStore.undo()} disabled={!gameStore.canUndo}>↶</button>
+  <button aria-label="Redo" title="Redo" onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>↷</button>
+  <button aria-label="Hint" title="Hint" onclick={() => gameStore.requestHint()} disabled={cur.status !== 'playing'}>💡</button>
+  <button aria-label="New game" title="New game" onclick={() => gameStore.newGame()}>＋</button>
+</nav>
 
 {#if settingsOpen}
   <div class="overlay" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
@@ -112,8 +117,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.6rem;
-    padding: 0.5rem 0.6rem;
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
     background: rgba(0, 0, 0, 0.28);
     font-size: 0.9rem;
     user-select: none;
@@ -190,6 +195,11 @@
     line-height: 1;
   }
 
+  /* Bottom thumb bar — phones only; hidden on desktop. */
+  .actionbar {
+    display: none;
+  }
+
   .overlay {
     position: fixed;
     inset: 0;
@@ -226,8 +236,7 @@
     margin-top: 0.9rem;
   }
 
-  .row .primary,
-  .accent {
+  .row .primary {
     background: #ffd166;
     color: #123f30;
   }
@@ -253,9 +262,37 @@
   }
 
   @media (max-width: 620px) {
-    .actions button {
-      padding: 0.35rem 0.55rem;
+    .hud {
+      gap: 0.35rem;
+      padding: 0.4rem 0.45rem;
       font-size: 0.8rem;
+    }
+
+    .stats {
+      gap: 0.45rem;
+      font-size: 0.75rem;
+    }
+
+    /* Text action buttons move to the bottom thumb bar as icons. */
+    .actions .wide {
+      display: none;
+    }
+
+    .actionbar {
+      display: flex;
+      justify-content: space-evenly;
+      gap: 0.5rem;
+      padding: 0.35rem 0.6rem;
+      background: rgba(0, 0, 0, 0.22);
+    }
+
+    .actionbar button {
+      flex: 1;
+      max-width: 6rem;
+      min-height: 48px;
+      font-size: 1.25rem;
+      line-height: 1;
+      border-radius: 12px;
     }
   }
 

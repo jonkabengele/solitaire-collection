@@ -30,6 +30,19 @@ export const PLACE_MS = 150;
 const DEAL_MS = 320;
 const DEAL_STAGGER = 40;
 
+/** Small horizontal jitter — feedback for a rejected tap/move. */
+export function shakeCard(scene: Phaser.Scene, spr: CardSprite): void {
+  const x = spr.x;
+  scene.tweens.add({
+    targets: spr,
+    x: x + 5,
+    duration: 45,
+    yoyo: true,
+    repeat: 3,
+    onComplete: () => spr.setX(x)
+  });
+}
+
 /** Deal animation origin — when set, unplaced cards fly in from here. */
 export type DealOrigin = { x: number; y: number } | null;
 

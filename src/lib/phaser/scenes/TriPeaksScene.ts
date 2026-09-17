@@ -15,7 +15,7 @@ import {
 } from '../tripeaksLayout.js';
 import { CardSprite } from '../objects/CardSprite.js';
 import { Pile } from '../objects/Pile.js';
-import { syncSprites, type Target } from '../objects/spriteSync.js';
+import { syncSprites, shakeCard, type Target } from '../objects/spriteSync.js';
 import { SwipeController } from '../objects/SwipeController.js';
 import { hintFx, type HintRect } from '../objects/hintFx.js';
 import { bindSfx, playSfx } from '../sfx.js';
@@ -108,20 +108,7 @@ export class TriPeaksScene extends Phaser.Scene {
     });
     playSfx(ok ? 'place' : 'invalid');
     haptic(ok ? 'place' : 'invalid');
-    if (!ok) this.shake(spr);
-  }
-
-  /** Small horizontal jitter on a rejected tap. */
-  private shake(spr: CardSprite): void {
-    const x = spr.x;
-    this.tweens.add({
-      targets: spr,
-      x: x + 5,
-      duration: 45,
-      yoyo: true,
-      repeat: 3,
-      onComplete: () => spr.setX(x)
-    });
+    if (!ok) shakeCard(this, spr);
   }
 
   /** Flatten state into per-card render targets. */
