@@ -7,7 +7,7 @@
  * (`docker compose -f docker-compose.nakama.yml up -d`).
  */
 import { describe, expect, it } from 'vitest';
-import { Client, type MatchData, type Socket } from '@heroiclabs/nakama-js';
+import { Client, Session, type MatchData, type Socket } from '@heroiclabs/nakama-js';
 import type { Move } from '../src/lib/engine/types.js';
 import { getVariant } from '../src/lib/variants/index.js';
 import { solve } from '../src/lib/engine/solver.js';
@@ -17,6 +17,8 @@ const LIVE = process.env.NAKAMA_E2E === '1';
 const itLive = LIVE ? it : it.skip;
 
 interface TestClient {
+  client: Client;
+  session: Session;
   socket: Socket;
   userId: string;
   matchId: string | null;
@@ -32,6 +34,8 @@ async function mkClient(deviceId: string): Promise<TestClient> {
   const session = await client.authenticateDevice(deviceId, true);
   const socket = client.createSocket(false, false);
   const tc: TestClient = {
+    client,
+    session,
     socket,
     userId: session.user_id!,
     matchId: null,
@@ -135,6 +139,14 @@ describe('live race E2E (requires local Nakama)', () => {
       expect(a.end!.reason).toBe('solved');
       expect(a.end!.scores[a.userId]).toBeGreaterThan(0);
 
+      // History record: server wrote a replayable entry per player.
+      const hist = await a.client.listStorageObjects(a.session, 'race_history', a.userId, 5);
+      const rec = hist.objects?.find((o) => o.key.startsWith(a.matchId!.split('.')[0]));
+      expect(rec).toBeDefined();
+      const val = rec!.value as { outcome: string; myMoves: unknown[]; oppMoves: unknown[] };
+      expect(val.outcome).toBe('won');
+      expect(val.myMoves.length).toBe(path!.length);
+      expect(val.oppMoves.length).toBe(0); // B's illegal log was rejected — never applied
       await a.socket.disconnect(false);
       await b.socket.disconnect(false);
     },

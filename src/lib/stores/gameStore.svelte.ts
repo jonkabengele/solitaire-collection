@@ -42,6 +42,8 @@ class GameStore {
   #wonSeeds = new Set<string>();
   #autoTimer: ReturnType<typeof setInterval> | null = null;
   #autoDelay: ReturnType<typeof setTimeout> | null = null;
+  /** Replay mode: the board shows a stored match, not a live game. */
+  #replaying = $state(false);
   readonly #slots = $state<Partial<Record<VariantId, Slot>>>({});
   readonly #listeners = new Set<StateListener>();
   readonly #navListeners = new Set<NavListener>();
@@ -60,6 +62,11 @@ class GameStore {
   /** `true` once any variant has been started. */
   get started(): boolean {
     return this.#state !== null;
+  }
+
+  /** `true` while the board is replaying a stored match (input blocked). */
+  get replaying(): boolean {
+    return this.#replaying;
   }
 
   /** Variant id awaiting a "Save and switch?" decision, or null. */
@@ -191,8 +198,10 @@ class GameStore {
   /**
    * Route a move through the single `applyMove` pathway. Returns `false`
    * when the engine rejected it (illegal move → same object back).
+   * No-ops during replay — the board is read-only then.
    */
   dispatchMove(move: Move): boolean {
+    if (this.#replaying) return false;
     const next = applyMove(this.state, move);
     if (next === this.state) return false;
     this.#redoLog = [];
@@ -248,6 +257,49 @@ class GameStore {
   onHint(fn: HintListener): () => void {
     this.#hintListeners.add(fn);
     return () => this.#hintListeners.delete(fn);
+  }
+
+  /**
+   * Replay entry point: deal `seed` on `variantId`'s board and mark the
+   * store read-only. `replayStore` then steps the stored move log through
+   * `replayApply`. No stats, no auto-finish, no input — pure playback.
+   */
+  startReplay(variantId: VariantId, seed: string): void {
+    this.#stopAuto();
+    this.#redoLog = [];
+    // Preserve a live in-progress game — replay borrows the board, doesn't end it.
+    const cur = this.#state;
+    if (cur !== null && !this.#replaying && cur.status === 'playing' && cur.moves.length > 0) {
+      this.#slots[cur.variant] = { state: cur, elapsedMs: Date.now() - cur.startedAt };
+    }
+    this.#replaying = true;
+    this.#commit(getVariant(variantId).initialState(seed));
+    this.#emitNav(variantId);
+  }
+
+  /** Apply one logged move during replay. Returns false if it didn't land. */
+  replayApply(move: Move): boolean {
+    if (!this.#replaying) return false;
+    const next = applyMove(this.state, move);
+    if (next === this.state) return false;
+    this.#commit(next);
+    return true;
+  }
+
+  /** Rebuild the replayed board at move `count` (seek support). */
+  replaySeek(count: number, log: Move[]): void {
+    if (!this.#replaying) return;
+    let s = this.variant.initialState(this.state.seed);
+    for (const m of log.slice(0, count)) s = applyMove(s, m);
+    this.#commit(s);
+  }
+
+  /** Exit replay: drop the board state and return to the menu. */
+  stopReplay(): void {
+    this.#replaying = false;
+    this.#stopAuto();
+    this.#state = null;
+    this.#emitNav('menu');
   }
 
   /**
@@ -353,6 +405,8 @@ class GameStore {
   #commit(s: GameState): void {
     const prev = this.#state;
     this.#state = s;
+    for (const fn of this.#listeners) fn(s);
+    if (this.#replaying) return; // replay: render only — no stats, no auto-finish
     const key = `${s.variant}:${s.seed}`;
     if (s.moves.length === 1 && !this.#playedSeeds.has(key)) {
       this.#playedSeeds.add(key);
@@ -365,7 +419,6 @@ class GameStore {
     if (prev?.status === 'playing' && s.status === 'lost') {
       statsStore.recordLoss(s.variant);
     }
-    for (const fn of this.#listeners) fn(s);
     // Only trivial foundation progress left → finish automatically.
     if (this.canAutoComplete) this.#startAutoSoon();
   }

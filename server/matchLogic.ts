@@ -57,19 +57,27 @@ export interface MatchState {
   variant: VariantId;
   createdAt: number;
   endsAt: number;
+  /** How long the lobby waits for a second seat — longer for private races. */
+  lobbyTimeoutMs: number;
   players: Record<string, PlayerSlot>;
   winnerId: string | null;
   /** `'draw'` in winnerId means tied; endReason explains the finish. */
   endReason: EndReason | null;
 }
 
-export function createMatch(seed: string, variant: VariantId, now: number): MatchState {
+export function createMatch(
+  seed: string,
+  variant: VariantId,
+  now: number,
+  lobbyTimeoutMs = LOBBY_TIMEOUT_MS
+): MatchState {
   return {
     phase: 'lobby',
     seed,
     variant,
     createdAt: now,
     endsAt: 0,
+    lobbyTimeoutMs,
     players: {},
     winnerId: null,
     endReason: null
@@ -177,7 +185,7 @@ export type TickEvent =
 export function tick(m: MatchState, now: number): TickEvent[] {
   const out: TickEvent[] = [];
   if (m.phase === 'lobby') {
-    if (now - m.createdAt > LOBBY_TIMEOUT_MS && Object.keys(m.players).length < MAX_PLAYERS) {
+    if (now - m.createdAt > m.lobbyTimeoutMs && Object.keys(m.players).length < MAX_PLAYERS) {
       m.phase = 'ended';
       m.endReason = 'abort';
       out.push({ type: 'end', winnerId: null, reason: 'abort', scores: scoresOf(m) });

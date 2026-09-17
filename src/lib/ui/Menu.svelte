@@ -59,6 +59,7 @@
   <div class="footer">
     {#if RACE_AVAILABLE}
       <button class="race-link" onclick={() => (uiStore.raceOpen = true)}>⚔ RACE</button>
+      <button class="stats-link" onclick={() => (uiStore.socialOpen = true)}>SOCIAL</button>
     {/if}
     <button class="stats-link" onclick={() => (uiStore.statsOpen = true)}>STATISTICS</button>
     <button class="stats-link" onclick={() => (uiStore.aboutOpen = true)}>ABOUT</button>

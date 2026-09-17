@@ -54,6 +54,34 @@ declare namespace nk {
     binaryToString(data: Uint8Array): string;
     stringToBinary(s: string): Uint8Array;
     matchCreate(module: string, params?: Record<string, unknown>): string;
+    leaderboardCreate(
+      id: string,
+      authoritative?: boolean,
+      sortOrder?: 'asc' | 'desc',
+      operator?: 'best' | 'set' | 'incr' | 'decr',
+      resetSchedule?: string,
+      metadata?: Record<string, unknown>
+    ): void;
+    leaderboardRecordWrite(
+      id: string,
+      ownerId: string,
+      username?: string,
+      score?: number,
+      subscore?: number,
+      metadata?: Record<string, unknown>,
+      overrideOperator?: 'best' | 'set' | 'incr' | 'decr'
+    ): unknown;
+    storageWrite(
+      ops: {
+        collection: string;
+        key: string;
+        userId?: string;
+        value: Record<string, unknown>;
+        permissionRead?: number;
+        permissionWrite?: number;
+        version?: string;
+      }[]
+    ): unknown[];
   }
 
   interface MatchmakerResult {

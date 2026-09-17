@@ -86,3 +86,13 @@ export function getSocket(): Socket | null {
 export function getUserId(): string | null {
   return session?.user_id ?? null;
 }
+
+/**
+ * REST-side access for social APIs (leaderboards, storage, friends, RPC).
+ * Ensures a session exists but opens no realtime socket — cheaper than
+ * `connect()` when no match is involved.
+ */
+export async function api(): Promise<{ client: Client; session: Session }> {
+  const s = await authenticate();
+  return { client: nakamaClient(), session: s };
+}

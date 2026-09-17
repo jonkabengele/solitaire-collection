@@ -7,6 +7,33 @@
   import { raceStore } from '../stores/raceStore.svelte.js';
   import { uiStore } from '../stores/ui.svelte.js';
 
+  let joinCode = $state('');
+  let copied = $state(false);
+
+  const inviteUrl = $derived(
+    raceStore.inviteId
+      ? `${location.origin}${location.pathname}?race=${encodeURIComponent(raceStore.inviteId)}`
+      : ''
+  );
+
+  /** Accepts a bare match id or a full invite link — extract `?race=` when given a URL. */
+  function joinWith(raw: string): void {
+    const t = raw.trim();
+    if (!t) return;
+    const m = t.match(/[?&]race=([^&\s]+)/);
+    void raceStore.joinPrivate(m ? decodeURIComponent(m[1]) : t);
+  }
+
+  async function copyInvite(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
+    } catch {
+      /* clipboard blocked — the link is visible to copy manually */
+    }
+  }
+
   function fmtClock(s: number | null): string {
     if (s === null) return '–:––';
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -83,9 +110,15 @@
             {raceStore.phase === 'connecting'
               ? 'Connecting…'
               : raceStore.phase === 'matched'
-                ? 'Opponent found — starting…'
+                ? raceStore.inviteId
+                  ? 'Share this link — the race starts when they join.'
+                  : 'Joining the race…'
                 : 'Searching for an opponent…'}
           </p>
+          {#if raceStore.inviteId}
+            <code class="invite">{inviteUrl}</code>
+            <button class="btn" onclick={copyInvite}>{copied ? 'Copied!' : 'Copy invite'}</button>
+          {/if}
           <button class="btn" onclick={cancel}>Cancel</button>
         </div>
       {:else if raceStore.phase === 'ended' && raceStore.result}
@@ -114,6 +147,12 @@
         <div class="center">
           <p class="status">Race a live opponent — same deal, 5 minutes, highest score wins.</p>
           <button class="btn primary" onclick={find}>Find match</button>
+          <div class="divider"><span>or race a friend</span></div>
+          <button class="btn" onclick={() => void raceStore.createPrivate()}>Create private race</button>
+          <form class="join" onsubmit={(e) => { e.preventDefault(); joinWith(joinCode); }}>
+            <input bind:value={joinCode} placeholder="Paste invite code or link" autocomplete="off" />
+            <button class="btn" type="submit">Join</button>
+          </form>
         </div>
       {/if}
     </div>
@@ -240,6 +279,56 @@
   .row {
     display: flex;
     gap: 0.5rem;
+  }
+
+  .invite {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: 0.68rem;
+    color: #ffd166;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .divider::before,
+  .divider::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .join {
+    display: flex;
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .join input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    color: #f5f7f5;
+    padding: 0.45rem 0.8rem;
+    font: inherit;
+    font-size: 0.8rem;
+  }
+
+  .join input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
   }
 
   .spinner {

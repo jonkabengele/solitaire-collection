@@ -10,6 +10,8 @@ class UiStore {
   aboutOpen = $state(false);
   /** Race lobby overlay (matchmaking / result). In-race HUD lives in Race.svelte. */
   raceOpen = $state(false);
+  /** Social overlay (leaderboards / friends / history / profile). */
+  socialOpen = $state(false);
 }
 
 export const uiStore = new UiStore();

@@ -12,7 +12,7 @@ import type { Match, MatchData, MatchmakerMatched, Socket } from '@heroiclabs/na
 import type { VariantId } from '../engine/types.js';
 import { gameStore } from './gameStore.svelte.js';
 import { statsStore } from './stats.svelte.js';
-import { connect, getUserId } from '../net/nakama.js';
+import { api, connect, getUserId } from '../net/nakama.js';
 import {
   OP,
   type EndMsg,
@@ -54,6 +54,8 @@ class RaceStore {
   myScore = $state(0);
   result = $state<RaceResult | null>(null);
   errorMsg = $state<string | null>(null);
+  /** Match id of a private race we created — the invite code. */
+  inviteId = $state<string | null>(null);
 
   #socket: Socket | null = null;
   #match: Match | null = null;
@@ -80,6 +82,48 @@ class RaceStore {
       this.phase = 'searching';
       const t = await socket.addMatchmaker('*', 2, 2);
       this.#ticket = t.ticket;
+    } catch (e) {
+      this.#fail(e);
+    }
+  }
+
+  /**
+   * Create a private race and sit in its lobby. The returned match id is
+   * the invite — a friend joins it via `joinPrivate` (deep link `?race=`).
+   * Private lobbies wait far longer for the second seat than matchmaking.
+   */
+  async createPrivate(): Promise<void> {
+    if (this.phase === 'connecting' || this.phase === 'searching' || this.phase === 'matched') return;
+    this.errorMsg = null;
+    this.result = null;
+    this.phase = 'connecting';
+    try {
+      const { client, session } = await api();
+      const res = await client.rpc(session, 'create_private_race', {});
+      const { matchId } = res.payload as { matchId: string };
+      const { socket } = await connect();
+      this.#socket = socket;
+      this.#wireSocket(socket);
+      this.#match = await socket.joinMatch(matchId);
+      this.inviteId = matchId;
+      this.phase = 'matched';
+    } catch (e) {
+      this.#fail(e);
+    }
+  }
+
+  /** Join a private race from an invite code or `?race=` deep link. */
+  async joinPrivate(matchId: string): Promise<void> {
+    if (this.phase === 'connecting' || this.phase === 'searching' || this.phase === 'matched') return;
+    this.errorMsg = null;
+    this.result = null;
+    this.phase = 'connecting';
+    try {
+      const { socket } = await connect();
+      this.#socket = socket;
+      this.#wireSocket(socket);
+      this.#match = await socket.joinMatch(matchId);
+      this.phase = 'matched';
     } catch (e) {
       this.#fail(e);
     }
@@ -241,6 +285,7 @@ class RaceStore {
     this.#unsubGame = null;
     this.#match = null;
     this.#ticket = null;
+    this.inviteId = null;
     this.opponent = null;
     this.myScore = 0;
     this.secondsLeft = null;

@@ -70,6 +70,20 @@ describe('lobby & joining', () => {
     ]);
     expect(m.phase).toBe('ended');
   });
+
+  it('honours a custom lobby timeout (private races wait longer)', () => {
+    const PRIVATE_TIMEOUT = 15 * 60 * 1000;
+    const m = createMatch(SEED, 'klondike', T0, PRIVATE_TIMEOUT);
+    addPlayer(m, 'u1', 's1', 'alice');
+    // Still alive past the default 15 s window…
+    expect(tick(m, T0 + LOBBY_TIMEOUT_MS + 1)).toEqual([]);
+    expect(m.phase).toBe('lobby');
+    // …but aborts once the private timeout elapses.
+    const ev = tick(m, T0 + PRIVATE_TIMEOUT + 1);
+    expect(ev).toEqual([
+      { type: 'end', winnerId: null, reason: 'abort', scores: { u1: 0 } }
+    ]);
+  });
 });
 
 describe('syncMoves — server-authoritative validation', () => {

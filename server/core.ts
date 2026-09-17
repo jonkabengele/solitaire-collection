@@ -45,8 +45,12 @@ function broadcastStart(d: nk.Dispatcher, m: MatchState, now: number): void {
   );
 }
 
+/** Private races wait 5min for the invited friend (vs 15s matchmaking). */
+const PRIVATE_LOBBY_TIMEOUT_MS = 5 * 60 * 1000;
+
 export function matchInit(_ctx: nk.Context, logger: nk.Logger, nk: nk.Nakama, params: Record<string, unknown>) {
   const variant = (params['variant'] as VariantId | undefined) ?? 'klondike';
+  const isPrivate = params['private'] === true;
   // Deal solver-verified seeds so every race is winnable; if the bounded
   // search doesn't confirm one in time, fall back to the raw uuid.
   const found = findSolvableSeed(getVariant(variant), nk.uuidv4(), {
@@ -54,9 +58,10 @@ export function matchInit(_ctx: nk.Context, logger: nk.Logger, nk: nk.Nakama, pa
     maxAttempts: 6
   });
   const seed = found.solved ? found.seed : nk.uuidv4();
-  logger.info('race match init: variant=%s seed=%s solvable=%s attempts=%d', variant, seed, found.solved, found.attempts);
+  logger.info('race match init: variant=%s seed=%s solvable=%s attempts=%d private=%s', variant, seed, found.solved, found.attempts, isPrivate);
+  const lobbyTimeout = isPrivate ? PRIVATE_LOBBY_TIMEOUT_MS : undefined;
   return {
-    state: { m: createMatch(seed, variant, Date.now()), endBroadcastAt: 0 } as ServerState,
+    state: { m: createMatch(seed, variant, Date.now(), lobbyTimeout), endBroadcastAt: 0 } as ServerState,
     tickRate: 5,
     label: `race:${variant}`
   };
@@ -131,7 +136,7 @@ export function matchLeave(
 }
 
 export function matchLoop(
-  _ctx: nk.Context,
+  ctx: nk.Context,
   logger: nk.Logger,
   nk: nk.Nakama,
   dispatcher: nk.Dispatcher,
@@ -174,6 +179,7 @@ export function matchLoop(
     );
     state.endBroadcastAt = now;
     logger.info('race ended: winner=%s reason=%s', ev.winnerId, ev.reason);
+    recordResult(nk, logger, state.m, ev.winnerId, ev.reason ?? 'draw', ctx.matchId);
   }
   // Tear down shortly after the end broadcast so it reliably lands.
   if (state.m.phase === 'ended' && state.endBroadcastAt !== 0 && now - state.endBroadcastAt > 2000) {
@@ -207,4 +213,85 @@ export function matchSignal(
 
 export function matchmakerMatched(_ctx: nk.Context, _logger: nk.Logger, nk: nk.Nakama) {
   return nk.matchCreate('race', { variant: 'klondike' });
+}
+
+/**
+ * RPC 'create_private_race' → matchId. The creator joins it directly with
+ * joinMatch(matchId); the invite link carries the same id to the friend.
+ * Private matches skip the matchmaker entirely.
+ */
+export function rpcCreatePrivateRace(
+  ctx: nk.Context,
+  _logger: nk.Logger,
+  nk: nk.Nakama,
+  _payload: string
+): string {
+  const matchId = nk.matchCreate('race', { variant: 'klondike', private: true });
+  return JSON.stringify({ matchId, host: ctx.userId ?? null });
+}
+
+/** Called once from InitModule — creates the race leaderboards (idempotent). */
+export function setupLeaderboards(nk: nk.Nakama, logger: nk.Logger): void {
+  for (const [id, op] of [
+    ['race_wins', 'incr'],
+    ['race_best', 'best']
+  ] as const) {
+    try {
+      nk.leaderboardCreate(id, true, 'desc', op);
+    } catch (e) {
+      logger.warn('leaderboard %s: %s', id, e);
+    }
+  }
+}
+
+/**
+ * Persist a finished race: winner's win count, both players' best score,
+ * and a per-player history record carrying both move logs for replays.
+ * All writes are best-effort — a storage failure must not kill the match.
+ */
+function recordResult(
+  nk: nk.Nakama,
+  logger: nk.Logger,
+  m: MatchState,
+  winnerId: string | null,
+  reason: string,
+  matchId: string
+): void {
+  try {
+    const players = Object.values(m.players);
+    if (winnerId !== null) {
+      const w = m.players[winnerId];
+      nk.leaderboardRecordWrite('race_wins', winnerId, w?.username ?? '', 1, 0, {}, 'incr');
+    }
+    for (const p of players) {
+      nk.leaderboardRecordWrite('race_best', p.userId, p.username, p.score, 0, {}, 'best');
+    }
+    for (const p of players) {
+      const opp = players.find((o) => o.userId !== p.userId);
+      const outcome = winnerId === null ? 'draw' : winnerId === p.userId ? 'won' : 'lost';
+      nk.storageWrite([
+        {
+          collection: 'race_history',
+          key: `${matchId}`,
+          userId: p.userId,
+          value: {
+            matchId,
+            variant: m.variant,
+            seed: m.seed,
+            endedAt: Date.now(),
+            outcome,
+            reason,
+            me: { userId: p.userId, username: p.username, score: p.score },
+            opp: opp ? { userId: opp.userId, username: opp.username, score: opp.score } : null,
+            myMoves: p.state.moves,
+            oppMoves: opp ? opp.state.moves : []
+          },
+          permissionRead: 1,
+          permissionWrite: 0
+        }
+      ]);
+    }
+  } catch (e) {
+    logger.error('recordResult failed: %s', e);
+  }
 }

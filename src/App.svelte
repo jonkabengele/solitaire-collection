@@ -6,10 +6,14 @@
   import Stats from './lib/ui/Stats.svelte';
   import About from './lib/ui/About.svelte';
   import Race from './lib/ui/Race.svelte';
+  import Social from './lib/ui/Social.svelte';
+  import Replay from './lib/ui/Replay.svelte';
   import InstallBanner from './lib/ui/InstallBanner.svelte';
   import { uiStore } from './lib/stores/ui.svelte.js';
   import { gameStore, type NavTarget } from './lib/stores/gameStore.svelte.js';
   import { installStore } from './lib/stores/install.svelte.js';
+  import { raceStore } from './lib/stores/raceStore.svelte.js';
+  import { RACE_AVAILABLE } from './lib/net/nakama.js';
 
   let gameEl!: HTMLDivElement;
   let game: Phaser.Game | null = null;
@@ -64,6 +68,13 @@
 
   onMount(() => {
     const offNav = gameStore.onNavigate((t) => void onNav(t));
+    // Invite deep link: `?race=<matchId>` opens the lobby and joins.
+    const race = new URLSearchParams(location.search).get('race');
+    if (race && RACE_AVAILABLE) {
+      uiStore.raceOpen = true;
+      void raceStore.joinPrivate(race);
+      history.replaceState(null, '', location.pathname);
+    }
     return () => {
       offNav();
       game?.destroy(true);
@@ -93,6 +104,12 @@
 {/if}
 
 <Race />
+
+{#if uiStore.socialOpen}
+  <Social />
+{/if}
+
+<Replay />
 
 <InstallBanner />
 

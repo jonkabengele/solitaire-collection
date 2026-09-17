@@ -18,6 +18,13 @@ solver-verified deals, plus live 1v1 race mode on Nakama. Svelte 5 + Phaser
 
 ## Develop
 
+```powershell
+.\start-all.ps1            # Docker + Nakama + Vite dev in one shot
+.\start-all.ps1 -NoServer  # solo only — skip Docker/Nakama
+```
+
+Or by hand:
+
 ```bash
 npm install
 npm run dev        # http://localhost:5173
@@ -53,12 +60,31 @@ no signup). Override with `VITE_NAKAMA_HOST|PORT|SSL|KEY`.
 Production deploy: run Nakama on a VPS with this compose file, set
 `VITE_NAKAMA_*` at build time, use a real `--socket.server_key`.
 
+## Social layer (Phase 10)
+
+On the same Nakama — no extra services:
+
+- **Leaderboards** `race_wins` (incr) + `race_best` (best), created at
+  module init, written on every match end.
+- **Race history** — per-player `race_history` storage objects holding both
+  move logs, written at match end; the History tab replays either side
+  through the deterministic engine (no snapshots stored).
+- **Private races** — lobby → "Create private race" → share `?race=<id>`
+  link; the friend joins from the link, paste-in box, or deep link.
+  Private lobbies wait 15 min for the second seat (vs 15 s matchmaking).
+- **Profile** — username + optional email link (identity upgrade; device
+  auth stays the base identity).
+
+Client: `src/lib/stores/socialStore.svelte.ts` (REST), `replayStore`
+(drives the board read-only through `gameStore.startReplay`), `Social` /
+`Replay` overlays.
+
 ## Layout
 
 ```
 src/lib/engine      pure game logic (types, deck, rng, applyMove, solver)
 src/lib/variants    klondike / freecell / tripeaks rules + scoring
-src/lib/stores      Svelte rune stores (game, race, stats, ui, settings)
+src/lib/stores      Svelte rune stores (game, race, social, replay, stats, ui, settings)
 src/lib/phaser      scenes, sprites, input, layout, sfx
 src/lib/net         nakama client + wire protocol
 src/lib/ui          DOM overlays (menu, HUD, race, stats, about)
