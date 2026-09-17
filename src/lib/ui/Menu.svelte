@@ -8,6 +8,7 @@
   import { gameStore } from '../stores/gameStore.svelte.js';
   import { statsStore } from '../stores/stats.svelte.js';
   import { uiStore } from '../stores/ui.svelte.js';
+  import { RACE_AVAILABLE } from '../net/nakama.js';
 
   type VariantCard = {
     id: VariantId;
@@ -56,7 +57,9 @@
   </div>
 
   <div class="footer">
-    <button class="race-link" onclick={() => (uiStore.raceOpen = true)}>⚔ RACE</button>
+    {#if RACE_AVAILABLE}
+      <button class="race-link" onclick={() => (uiStore.raceOpen = true)}>⚔ RACE</button>
+    {/if}
     <button class="stats-link" onclick={() => (uiStore.statsOpen = true)}>STATISTICS</button>
     <button class="stats-link" onclick={() => (uiStore.aboutOpen = true)}>ABOUT</button>
   </div>

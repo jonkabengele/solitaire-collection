@@ -8,6 +8,9 @@
  */
 import { Client, Session, type Socket } from '@heroiclabs/nakama-js';
 
+/** Show race UI only where a server is reachable: dev, or builds that set VITE_NAKAMA_HOST. */
+export const RACE_AVAILABLE = import.meta.env.DEV || !!import.meta.env.VITE_NAKAMA_HOST;
+
 const HOST = import.meta.env.VITE_NAKAMA_HOST ?? 'localhost';
 const PORT = import.meta.env.VITE_NAKAMA_PORT ?? '7350';
 const USE_SSL = import.meta.env.VITE_NAKAMA_SSL === 'true';
