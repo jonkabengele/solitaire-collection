@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import HUD from './lib/ui/HUD.svelte';
+  import Stats from './lib/ui/Stats.svelte';
   import { createGame } from './lib/phaser/game.js';
+  import { uiStore } from './lib/stores/ui.svelte.js';
 
   let gameEl!: HTMLDivElement;
 
@@ -15,6 +17,10 @@
   <HUD />
   <div class="game" bind:this={gameEl}></div>
 </main>
+
+{#if uiStore.statsOpen}
+  <Stats />
+{/if}
 
 <style>
   .shell {

@@ -13,6 +13,8 @@ import type { GameState, Move, Variant, VariantId } from '../engine/types.js';
 import { applyMove } from '../engine/applyMove.js';
 import { getVariant } from '../variants/index.js';
 import { isSolvable, solve } from '../engine/solver.js';
+import { solvableSeed } from '../services/seedCache.js';
+import { statsStore } from './stats.svelte.js';
 
 /** Listener invoked with the new state after every committed change. */
 export type StateListener = (state: GameState) => void;
@@ -28,17 +30,18 @@ type HintListener = (move: Move | null) => void;
 /** A suspended (non-active) in-progress game plus its frozen elapsed time. */
 type Slot = { state: GameState; elapsedMs: number };
 
-function newSeed(): string {
-  return `${Date.now().toString(36)}-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
-}
-
 class GameStore {
+  // The boot deal is solver-verified too — any state a player can reach
+  // is solvable (spec §Phase 5). One bounded sync solve at startup; the
+  // worker refills the cache in the background afterwards.
   #state = $state<GameState>({
-    ...getVariant('klondike').initialState(newSeed()),
+    ...getVariant('klondike').initialState(solvableSeed('klondike')),
     startedAt: Date.now()
   });
   #pendingSwitch = $state<VariantId | null>(null);
   #redoLog: Move[] = [];
+  #playedSeeds = new Set<string>();
+  #wonSeeds = new Set<string>();
   #autoTimer: ReturnType<typeof setInterval> | null = null;
   readonly #slots: Partial<Record<VariantId, Slot>> = {};
   readonly #listeners = new Set<StateListener>();
@@ -80,7 +83,7 @@ class GameStore {
     const s = this.#state;
     if (s.status !== 'playing' || s.variant === 'tripeaks') return false;
     const v = this.variant;
-    let cur = s;
+    let cur: GameState = s;
     for (let i = 0; i < 60; i++) {
       const fm = v
         .legalMoves(cur)
@@ -111,11 +114,19 @@ class GameStore {
    * replays a known deal (multiplayer-ready: same seed → same deck).
    * A fresh deal for `variantId` discards that variant's suspended game.
    */
-  newGame(variantId: VariantId = this.#state.variant, seed = newSeed()): void {
+  newGame(variantId: VariantId = this.#state.variant, seed?: string): void {
+    // Abandoning an in-progress game via New counts as a loss for streaks.
+    if (
+      variantId === this.#state.variant &&
+      this.#state.status === 'playing' &&
+      this.#state.moves.length > 0
+    ) {
+      statsStore.recordLoss(this.#state.variant);
+    }
     this.#slots[variantId] = undefined;
     this.#redoLog = [];
     this.#stopAuto();
-    const s = getVariant(variantId).initialState(seed);
+    const s = getVariant(variantId).initialState(seed ?? solvableSeed(variantId));
     this.#commit({ ...s, startedAt: Date.now() });
   }
 
@@ -301,7 +312,20 @@ class GameStore {
   }
 
   #commit(s: GameState): void {
+    const prev = this.#state;
     this.#state = s;
+    const key = `${s.variant}:${s.seed}`;
+    if (s.moves.length === 1 && !this.#playedSeeds.has(key)) {
+      this.#playedSeeds.add(key);
+      statsStore.recordPlayed(s.variant);
+    }
+    if (prev.status === 'playing' && s.status === 'won' && !this.#wonSeeds.has(key)) {
+      this.#wonSeeds.add(key);
+      statsStore.recordWin(s.variant, s.elapsedMs);
+    }
+    if (prev.status === 'playing' && s.status === 'lost') {
+      statsStore.recordLoss(s.variant);
+    }
     for (const fn of this.#listeners) fn(s);
   }
 

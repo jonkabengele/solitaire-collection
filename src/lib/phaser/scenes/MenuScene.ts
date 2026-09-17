@@ -6,6 +6,9 @@
 import Phaser from 'phaser';
 import type { VariantId } from '../../engine/types.js';
 import { gameStore } from '../../stores/gameStore.svelte.js';
+import { statsStore } from '../../stores/stats.svelte.js';
+import { uiStore } from '../../stores/ui.svelte.js';
+import { bindSfx } from '../sfx.js';
 
 type VariantCard = {
   id: VariantId;
@@ -29,6 +32,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    bindSfx(this);
     this.build();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.build, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -65,6 +69,23 @@ export class MenuScene extends Phaser.Scene {
 
     if (portrait) this.buildRows(w, h);
     else this.buildColumns(w, h);
+
+    // Footer: stats entry point.
+    const statsBtn = this.add
+      .text(w / 2, h - Math.max(20, h * 0.04), 'STATISTICS', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '13px',
+        fontStyle: '700',
+        color: 'rgba(255,255,255,0.65)',
+        letterSpacing: 3,
+        padding: { x: 14, y: 10 },
+        backgroundColor: 'rgba(255,255,255,0.07)'
+      })
+      .setOrigin(0.5)
+      .setInteractive({ cursor: 'pointer' });
+    statsBtn.on('pointerdown', () => {
+      uiStore.statsOpen = true;
+    });
   }
 
   /** Portrait: three full-width rows stacked. */
@@ -127,9 +148,15 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(row ? 0 : 0.5, 0.5);
 
-    // Stats line — real values land in Phase 5; placeholders until then.
+    // Live stats line (Phase 5): best time + win rate, or dashes if unplayed.
+    const st = statsStore.for(v.id);
+    const best =
+      st.bestMs === null
+        ? '—'
+        : `${Math.floor(st.bestMs / 60000)}:${String(Math.floor(st.bestMs / 1000) % 60).padStart(2, '0')}`;
+    const rate = st.played === 0 ? '—' : `${Math.round((st.won / st.played) * 100)}%`;
     this.add
-      .text(nameX, nameY + nameSize * 2.15, 'Best — · Win rate —', {
+      .text(nameX, nameY + nameSize * 2.15, `Best ${best} · Win rate ${rate}`, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: `${Math.max(10, nameSize * 0.55)}px`,
         color: 'rgba(255,255,255,0.4)'

@@ -2,6 +2,7 @@
   import type { VariantId } from '../engine/types.js';
   import { gameStore } from '../stores/gameStore.svelte.js';
   import { settingsStore } from '../stores/settings.svelte.js';
+  import { uiStore } from '../stores/ui.svelte.js';
 
   const VARIANTS: { id: VariantId; short: string; full: string }[] = [
     { id: 'klondike', short: 'K', full: 'Klondike' },
@@ -65,6 +66,7 @@
     <button onclick={() => gameStore.undo()} disabled={!gameStore.canUndo}>Undo</button>
     <button onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>Redo</button>
     <button onclick={() => gameStore.newGame()}>New</button>
+    <button class="ghost" title="Statistics" aria-label="Statistics" onclick={() => (uiStore.statsOpen = true)}>📊</button>
     <button class="ghost" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>⚙</button>
   </div>
 </header>
