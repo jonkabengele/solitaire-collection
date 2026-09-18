@@ -10,6 +10,7 @@ import { KlondikeScene } from './scenes/KlondikeScene.js';
 import { FreeCellScene } from './scenes/FreeCellScene.js';
 import { TriPeaksScene } from './scenes/TriPeaksScene.js';
 import { SpiderScene } from './scenes/SpiderScene.js';
+import { PyramidScene } from './scenes/PyramidScene.js';
 
 /**
  * Create and mount the Phaser game inside `parent`.
@@ -25,7 +26,7 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       width: '100%',
       height: '100%'
     },
-    scene: [BootScene, KlondikeScene, FreeCellScene, TriPeaksScene, SpiderScene],
+    scene: [BootScene, KlondikeScene, FreeCellScene, TriPeaksScene, SpiderScene, PyramidScene],
     banner: false
   });
   // Dev/E2E-only handle for tests and console debugging — absent from

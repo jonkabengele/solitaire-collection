@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
-   * Variant picker — a plain DOM overlay (no Phaser). Keeping the menu out
-   * of WebGL means the 1.4MB engine bundle only loads after the player
-   * picks a variant: fast first paint, near-zero boot TBT.
+   * Home screen — a scrollable, tiered variant picker (pure DOM, no
+   * Phaser). Implemented games render in full colour with stats; planned
+   * games show grayed-out "COMING SOON" placeholders so the collection's
+   * roadmap is visible without promising playable content.
    */
   import type { VariantId } from '../engine/types.js';
   import { gameStore } from '../stores/gameStore.svelte.js';
@@ -10,19 +11,65 @@
   import { uiStore } from '../stores/ui.svelte.js';
   import { RACE_AVAILABLE } from '../net/nakama.js';
 
-  type VariantCard = {
-    id: VariantId;
+  type MenuGame = {
+    /** Present only for implemented variants — absent = placeholder. */
+    id?: VariantId;
     name: string;
     blurb: string;
-    /** Face-card ids used as the decorative mini-preview. */
+    /** Face-card id used as the decorative mini-preview. */
     preview: string;
   };
 
-  const VARIANTS: VariantCard[] = [
-    { id: 'klondike', name: 'Klondike', blurb: 'The classic', preview: 's1' },
-    { id: 'freecell', name: 'FreeCell', blurb: 'All open, pure skill', preview: 's12' },
-    { id: 'tripeaks', name: 'TriPeaks', blurb: 'Clear the peaks', preview: 'h10' },
-    { id: 'spider', name: 'Spider', blurb: 'Two decks, ten columns', preview: 's13' }
+  type Tier = {
+    name: string;
+    /** Accent colour for the section header. */
+    hue: string;
+    games: MenuGame[];
+  };
+
+  const TIERS: Tier[] = [
+    {
+      name: 'Easy · Casual',
+      hue: '#7dd87d',
+      games: [
+        { id: 'klondike', name: 'Klondike', blurb: 'The classic', preview: 's1' },
+        { id: 'tripeaks', name: 'TriPeaks', blurb: 'Clear the peaks', preview: 'h10' },
+        { id: 'pyramid', name: 'Pyramid', blurb: 'Pairs to thirteen', preview: 'd13' },
+        { name: 'Golf', blurb: 'Nine columns, one wrap chain', preview: 'h5' }
+      ]
+    },
+    {
+      name: 'Strategic',
+      hue: '#ffd166',
+      games: [
+        { id: 'freecell', name: 'FreeCell', blurb: 'All open, pure skill', preview: 's12' },
+        { id: 'spider', name: 'Spider', blurb: 'Two decks, ten columns', preview: 's13' },
+        { name: 'Yukon', blurb: 'Klondike without the stock', preview: 's11' },
+        { name: 'Canfield', blurb: 'Reserve piles, tight scoring', preview: 'h13' },
+        { name: "Baker's Dozen", blurb: 'Open deck, kings to the top', preview: 'c9' }
+      ]
+    },
+    {
+      name: 'Hardcore',
+      hue: '#ff8f97',
+      games: [
+        { name: 'Scorpion', blurb: 'One suit, no mercy', preview: 's8' },
+        { name: 'Forty Thieves', blurb: 'Two decks, brutal odds', preview: 'd10' },
+        { name: 'Russian Solitaire', blurb: 'Yukon, suit-locked', preview: 'c13' },
+        { name: 'La Belle Lucie', blurb: 'Fans of three, redealt twice', preview: 'h11' },
+        { name: 'Aces Up', blurb: 'Discard to the aces', preview: 's1' },
+        { name: 'Calculation', blurb: 'Skip-count foundations', preview: 'h9' }
+      ]
+    },
+    {
+      name: 'Weird & Wonderful',
+      hue: '#b48cff',
+      games: [
+        { name: 'Accordion', blurb: 'One long squeezing line', preview: 'd6' },
+        { name: 'Clock', blurb: 'The deck decides everything', preview: 's12' },
+        { name: 'Cruel', blurb: 'Redeals on demand — at a price', preview: 'c5' }
+      ]
+    }
   ];
 
   function fmtBest(ms: number | null): string {
@@ -35,25 +82,46 @@
   <h1 class="title">SOLITAIRE</h1>
   <p class="subtitle">COLLECTION</p>
 
-  <div class="cards">
-    {#each VARIANTS as v (v.id)}
-      {@const st = statsStore.for(v.id)}
-      <button class="vcard" onclick={() => gameStore.selectVariant(v.id)}>
-        <span class="fan" aria-hidden="true">
-          <img class="mini back" src="assets/cards/back.svg" alt="" />
-          <img class="mini face" src="assets/cards/{v.preview}.svg" alt="" />
-        </span>
-        <span class="meta">
-          <span class="name">{v.name}</span>
-          <span class="blurb">{v.blurb}</span>
-          <span class="stat">
-            Best {fmtBest(st.bestMs)} · Win rate {st.played === 0 ? '—' : `${Math.round((st.won / st.played) * 100)}%`}
-          </span>
-        </span>
-        {#if gameStore.hasInProgress(v.id)}
-          <span class="chip">CONTINUE</span>
-        {/if}
-      </button>
+  <div class="scroll">
+    {#each TIERS as tier (tier.name)}
+      <section class="tier">
+        <h2 class="tier-name" style="--hue: {tier.hue}">{tier.name}</h2>
+        <div class="grid">
+          {#each tier.games as g (g.name)}
+            {#if g.id}
+              {@const st = statsStore.for(g.id)}
+              <button class="vcard" onclick={() => gameStore.selectVariant(g.id as VariantId)}>
+                <span class="fan" aria-hidden="true">
+                  <img class="mini back" src="assets/cards/back.svg" alt="" />
+                  <img class="mini face" src="assets/cards/{g.preview}.svg" alt="" />
+                </span>
+                <span class="meta">
+                  <span class="name">{g.name}</span>
+                  <span class="blurb">{g.blurb}</span>
+                  <span class="stat">
+                    Best {fmtBest(st.bestMs)} · Win {st.played === 0 ? '—' : `${Math.round((st.won / st.played) * 100)}%`}
+                  </span>
+                </span>
+                {#if gameStore.hasInProgress(g.id)}
+                  <span class="chip">CONTINUE</span>
+                {/if}
+              </button>
+            {:else}
+              <div class="vcard soon" aria-disabled="true" title="Coming soon">
+                <span class="fan" aria-hidden="true">
+                  <img class="mini back" src="assets/cards/back.svg" alt="" />
+                  <img class="mini face" src="assets/cards/{g.preview}.svg" alt="" />
+                </span>
+                <span class="meta">
+                  <span class="name">{g.name}</span>
+                  <span class="blurb">{g.blurb}</span>
+                </span>
+                <span class="soon-chip">SOON</span>
+              </div>
+            {/if}
+          {/each}
+        </div>
+      </section>
     {/each}
   </div>
 
@@ -81,7 +149,7 @@
   }
 
   .title {
-    margin: 4vh 0 0;
+    margin: 2vh 0 0;
     font-size: clamp(1.9rem, 7vw, 2.75rem);
     font-weight: 700;
     letter-spacing: 0.28em;
@@ -95,23 +163,41 @@
     color: rgba(255, 255, 255, 0.7);
   }
 
-  .cards {
+  /* The tiers scroll under a fixed title/footer. */
+  .scroll {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.9rem;
-    width: min(32rem, 100%);
-    padding: 1rem 0;
+    width: min(56rem, 100%);
+    overflow-y: auto;
+    padding: 0.8rem 0.2rem;
+    scrollbar-width: thin;
+  }
+
+  .tier {
+    margin-top: 0.9rem;
+  }
+
+  .tier-name {
+    margin: 0 0 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--hue);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.6rem;
   }
 
   .vcard {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    min-height: 72px;
-    padding: 0.7rem 1rem;
+    gap: 0.8rem;
+    min-height: 74px;
+    padding: 0.65rem 0.8rem;
     border: 1.5px solid rgba(255, 255, 255, 0.18);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.07);
@@ -122,22 +208,49 @@
     transition: background 120ms ease;
   }
 
-  .vcard:active {
+  button.vcard:active {
     background: rgba(255, 255, 255, 0.14);
     transform: scale(0.985);
+  }
+
+  /* Placeholder tier: muted, dashed, non-interactive. */
+  .vcard.soon {
+    cursor: default;
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .vcard.soon .fan {
+    filter: grayscale(1) brightness(0.7);
+    opacity: 0.6;
+  }
+
+  .soon-chip {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.6rem;
+    padding: 0.15rem 0.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.56rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
   }
 
   .fan {
     position: relative;
     flex: none;
-    width: 3.4rem;
-    height: 3.6rem;
+    width: 3.2rem;
+    height: 3.4rem;
   }
 
   .mini {
     position: absolute;
-    width: 2.55rem;
-    top: 0.35rem;
+    width: 2.4rem;
+    top: 0.3rem;
     border-radius: 4px;
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
   }
@@ -148,7 +261,7 @@
   }
 
   .mini.face {
-    left: 0.85rem;
+    left: 0.8rem;
     transform: rotate(7deg);
   }
 
@@ -159,31 +272,35 @@
   }
 
   .name {
-    font-size: 1.15rem;
+    font-size: 1.02rem;
     font-weight: 700;
   }
 
   .blurb {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .vcard.soon .blurb {
+    color: rgba(255, 255, 255, 0.4);
   }
 
   .stat {
     margin-top: 0.15rem;
-    font-size: 0.72rem;
-    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.66rem;
+    color: rgba(255, 255, 255, 0.62);
     font-variant-numeric: tabular-nums;
   }
 
   .chip {
     position: absolute;
-    top: 0.55rem;
-    right: 0.7rem;
+    top: 0.5rem;
+    right: 0.6rem;
     padding: 0.2rem 0.5rem;
     border-radius: 6px;
     background: #ffd166;
     color: #0b3d2e;
-    font-size: 0.62rem;
+    font-size: 0.58rem;
     font-weight: 700;
     letter-spacing: 0.06em;
   }
@@ -191,6 +308,7 @@
   .footer {
     display: flex;
     gap: 0.6rem;
+    padding-top: 0.6rem;
   }
 
   .stats-link {
@@ -217,26 +335,5 @@
     font-weight: 800;
     letter-spacing: 0.2em;
     cursor: pointer;
-  }
-
-  /* Landscape: three columns. */
-  @media (min-aspect-ratio: 1/1) and (min-width: 640px) {
-    .cards {
-      flex-direction: row;
-      align-items: center;
-      width: auto;
-    }
-
-    .vcard {
-      flex-direction: column;
-      width: min(15rem, 26vw);
-      min-height: 13rem;
-      text-align: center;
-      justify-content: center;
-    }
-
-    .meta {
-      align-items: center;
-    }
   }
 </style>

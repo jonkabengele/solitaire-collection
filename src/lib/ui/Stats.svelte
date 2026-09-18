@@ -7,7 +7,8 @@
     { id: 'klondike', name: 'Klondike' },
     { id: 'freecell', name: 'FreeCell' },
     { id: 'tripeaks', name: 'TriPeaks' },
-    { id: 'spider', name: 'Spider' }
+    { id: 'spider', name: 'Spider' },
+    { id: 'pyramid', name: 'Pyramid' }
   ];
 
   /** Two-step reset confirmation per variant. */

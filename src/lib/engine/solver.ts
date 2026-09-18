@@ -42,6 +42,9 @@ export function stateKey(state: GameState): string {
         state.tableau.map(face).sort().join(','),
         String(state.foundations.length)
       ].join('|');
+    case 'pyramid':
+      // Tableau positions are fixed (not interchangeable) — no sort.
+      return [pile(state.tableau), face(state.stock), pile(state.waste)].join('|');
   }
 }
 
@@ -78,7 +81,10 @@ function movedCard(s: GameState, m: Extract<Move, { type: 'move' }>): Card | und
       break;
     }
     case 'tableau':
-      pile = s.variant === 'tripeaks' ? [s.tableau[m.from.index]] : s.tableau[m.from.index];
+      pile =
+        s.variant === 'tripeaks' || s.variant === 'pyramid'
+          ? [s.tableau[m.from.index]]
+          : s.tableau[m.from.index];
       break;
   }
   return pile?.find((c) => c?.id === m.cardId) ?? undefined;

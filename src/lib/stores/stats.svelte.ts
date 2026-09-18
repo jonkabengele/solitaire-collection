@@ -39,14 +39,20 @@ const empty = (): VariantStats => ({
 function load(): StatsFile {
   const blank: StatsFile = {
     version: 1,
-    perVariant: { klondike: empty(), freecell: empty(), tripeaks: empty(), spider: empty() }
+    perVariant: {
+      klondike: empty(),
+      freecell: empty(),
+      tripeaks: empty(),
+      spider: empty(),
+      pyramid: empty()
+    }
   };
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return blank;
     const p = JSON.parse(raw) as Partial<StatsFile>;
     if (p.version !== 1 || !p.perVariant) return blank;
-    for (const v of ['klondike', 'freecell', 'tripeaks', 'spider'] as const) {
+    for (const v of ['klondike', 'freecell', 'tripeaks', 'spider', 'pyramid'] as const) {
       const src = p.perVariant[v];
       if (src && typeof src === 'object') {
         blank.perVariant[v] = { ...empty(), ...src };

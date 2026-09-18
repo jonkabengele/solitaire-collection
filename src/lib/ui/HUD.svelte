@@ -12,7 +12,8 @@
     { id: 'klondike', full: 'Klondike' },
     { id: 'freecell', full: 'FreeCell' },
     { id: 'tripeaks', full: 'TriPeaks' },
-    { id: 'spider', full: 'Spider' }
+    { id: 'spider', full: 'Spider' },
+    { id: 'pyramid', full: 'Pyramid' }
   ];
 
   let now = $state(Date.now());
@@ -66,6 +67,16 @@
         'Tap the stock to deal one card onto every column — every column must hold a card first.',
         'A completed King-to-Ace run in one suit clears itself to a top slot.',
         'Any card or run can fill an empty column.'
+      ]
+    },
+    pyramid: {
+      title: 'How to play Pyramid',
+      lines: [
+        'Goal: clear the whole pyramid by removing pairs that add up to 13.',
+        'Only uncovered cards play — a card is blocked while anything rests on it.',
+        'Kings clear on their own — tap one and it vanishes.',
+        'Tap a card, then tap its partner; when a card has several partners, they glow so you can choose.',
+        'Tap the stock to deal onto the waste — only the waste top plays. Stock runs out once, so spend it carefully.'
       ]
     }
   };

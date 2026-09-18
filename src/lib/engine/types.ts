@@ -36,7 +36,7 @@ export type Move =
 
 export type GameStatus = 'playing' | 'won' | 'lost';
 
-export type VariantId = 'klondike' | 'freecell' | 'tripeaks' | 'spider';
+export type VariantId = 'klondike' | 'freecell' | 'tripeaks' | 'spider' | 'pyramid';
 
 /** Fields shared by every variant's game state. */
 export type BaseState = {
@@ -99,8 +99,25 @@ export type SpiderState = BaseState & {
   foundations: Card[][];
 };
 
+/**
+ * Pyramid: 28 fixed positions in 7 rows (1-2-3-4-5-6-7). Removed pairs
+ * become `null`; a card is exposed once both positions covering it are
+ * cleared. All pyramid cards stay face-up — exposure is positional.
+ */
+export type PyramidState = BaseState & {
+  variant: 'pyramid';
+  tableau: (Card | null)[];
+  stock: Card[];
+  waste: Card[];
+};
+
 /** Discriminated union of all variant states — the canonical `GameState`. */
-export type GameState = KlondikeState | FreeCellState | TriPeaksState | SpiderState;
+export type GameState =
+  | KlondikeState
+  | FreeCellState
+  | TriPeaksState
+  | SpiderState
+  | PyramidState;
 
 /**
  * The per-variant contract (spec Phase 1). All functions are pure:
