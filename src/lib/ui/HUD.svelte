@@ -5,6 +5,7 @@
   import { uiStore } from '../stores/ui.svelte.js';
   import { swStore, checkForUpdates, applyUpdate } from '../stores/sw.svelte.js';
   import { practiceStore } from '../stores/practice.svelte.js';
+  import { statsStore } from '../stores/stats.svelte.js';
   import { getVariant } from '../variants/index.js';
 
   const VARIANTS: { id: VariantId; full: string }[] = [
@@ -105,6 +106,30 @@
     if (racing && remaining <= 0) practiceStore.timeUp = true;
     if (practiceStore.active && cur.status !== 'playing') practiceStore.stop();
   });
+
+  // End-of-game recap: the win flourish needs ~4s of runway (a skip-tap
+  // just brings the modal up sooner); a loss shows almost immediately.
+  let endOpen = $state(false);
+  let endTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    const st = cur.status;
+    clearTimeout(endTimer);
+    if (st === 'playing') {
+      endOpen = false;
+      return;
+    }
+    endTimer = setTimeout(
+      () => {
+        endOpen = true;
+      },
+      st === 'won' ? 4000 : 800
+    );
+    return () => clearTimeout(endTimer);
+  });
+  const variantStats = $derived(statsStore.for(cur.variant));
+  const isNewBest = $derived(
+    cur.status === 'won' && variantStats.bestMs !== null && cur.elapsedMs <= variantStats.bestMs
+  );
 
   /** New deals abandoning an in-progress game ask first. */
   function requestNew(): void {
@@ -280,6 +305,44 @@
           New game
         </button>
         <button onclick={() => (newConfirm = false)}>Keep playing</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if endOpen}
+  <div class="overlay" role="dialog" aria-modal="true" aria-label="Game over" tabindex="-1">
+    <div class="dialog recap-dialog">
+      <button class="x-btn" aria-label="Close" onclick={() => (endOpen = false)}>✕</button>
+      <p class="q">{cur.status === 'won' ? 'You win!' : 'No moves left'}</p>
+      <div class="recap">
+        <span class="stat-box"><b>{fmt(cur.elapsedMs)}</b><i>time</i></span>
+        <span class="stat-box"><b>{cur.moves.length}</b><i>moves</i></span>
+        <span class="stat-box"><b>{getVariant(cur.variant).score(cur)}</b><i>score</i></span>
+      </div>
+      {#if cur.status === 'won' && variantStats.bestMs !== null}
+        <p class="sub">
+          Best time: {fmt(variantStats.bestMs)}{isNewBest ? ' — new best!' : ''}
+        </p>
+      {/if}
+      <div class="row">
+        <button
+          class="primary"
+          onclick={() => {
+            endOpen = false;
+            gameStore.newGame();
+          }}
+        >
+          Play again
+        </button>
+        <button
+          onclick={() => {
+            endOpen = false;
+            gameStore.openMenu();
+          }}
+        >
+          Home
+        </button>
       </div>
     </div>
   </div>
@@ -475,6 +538,46 @@
 
   .rules li + li {
     margin-top: 0.3rem;
+  }
+
+  .recap-dialog {
+    position: relative;
+  }
+
+  .x-btn {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .recap {
+    display: flex;
+    justify-content: center;
+    gap: 1.1rem;
+    margin-top: 0.9rem;
+  }
+
+  .stat-box {
+    display: flex;
+    flex-direction: column;
+    min-width: 3.4rem;
+  }
+
+  .stat-box b {
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-box i {
+    font-style: normal;
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
   }
 
   @media (max-width: 620px) {
