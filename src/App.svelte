@@ -24,6 +24,19 @@
     if (gameStore.started && gameStore.state.status === 'won') installStore.suggestAfterWin();
   });
 
+  // The play clock only runs while the board is in focus — any full
+  // overlay (menu, stats, social, replay) freezes it.
+  $effect(() => {
+    const open =
+      uiStore.menuOpen ||
+      uiStore.statsOpen ||
+      uiStore.aboutOpen ||
+      uiStore.raceOpen ||
+      uiStore.socialOpen ||
+      gameStore.replaying;
+    gameStore.setPaused('overlay', open);
+  });
+
   /**
    * Phaser loads lazily on the first variant pick — the menu is pure DOM,
    * so boot stays fast and the 1.4MB engine chunk stays off the critical

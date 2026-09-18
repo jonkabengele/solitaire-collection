@@ -21,6 +21,7 @@
 
   let settingsOpen = $state(false);
   let helpOpen = $state(false);
+  let newConfirm = $state(false);
 
   const RULES: Record<VariantId, { title: string; lines: string[] }> = {
     klondike: {
@@ -57,9 +58,34 @@
   const cur = $derived(gameStore.state);
   const pending = $derived(gameStore.pendingSwitch);
   const pendingName = $derived(VARIANTS.find((v) => v.id === pending)?.full ?? '');
+  // The clock starts on the first move and freezes while paused (modal
+  // open / tab hidden) — pauseBeganAt stands in for "now" then.
   const elapsed = $derived(
-    cur.status === 'playing' ? now - cur.startedAt : cur.elapsedMs
+    cur.moves.length === 0
+      ? 0
+      : cur.status === 'playing'
+        ? (gameStore.paused ? gameStore.pauseBeganAt : now) - cur.startedAt
+        : cur.elapsedMs
   );
+
+  // Any open dialog freezes the play clock; reasons stack in the store.
+  $effect(() => {
+    gameStore.setPaused('settings', settingsOpen);
+    gameStore.setPaused('help', helpOpen);
+    gameStore.setPaused('confirm-new', newConfirm);
+    gameStore.setPaused('switch', pending !== null);
+    return () => {
+      for (const r of ['settings', 'help', 'confirm-new', 'switch']) {
+        gameStore.setPaused(r, false);
+      }
+    };
+  });
+
+  /** New deals abandoning an in-progress game ask first. */
+  function requestNew(): void {
+    if (gameStore.inProgress) newConfirm = true;
+    else gameStore.newGame();
+  }
 
   function fmt(ms: number): string {
     const s = Math.max(0, Math.floor(ms / 1000));
@@ -96,7 +122,7 @@
     <button class="wide" onclick={() => gameStore.requestHint()} disabled={cur.status !== 'playing'}>Hint</button>
     <button class="wide" onclick={() => gameStore.undo()} disabled={!gameStore.canUndo}>Undo</button>
     <button class="wide" onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>Redo</button>
-    <button class="wide" onclick={() => gameStore.newGame()}>New</button>
+    <button class="wide" onclick={requestNew}>New</button>
     <button class="ghost" title="Statistics" aria-label="Statistics" onclick={() => (uiStore.statsOpen = true)}>📊</button>
     <button class="ghost" title="How to play" aria-label="How to play" onclick={() => (helpOpen = true)}>?</button>
     <button class="ghost" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>⚙</button>
@@ -108,7 +134,7 @@
   <button aria-label="Undo" title="Undo" onclick={() => gameStore.undo()} disabled={!gameStore.canUndo}>↶</button>
   <button aria-label="Redo" title="Redo" onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>↷</button>
   <button aria-label="Hint" title="Hint" onclick={() => gameStore.requestHint()} disabled={cur.status !== 'playing'}>💡</button>
-  <button aria-label="New game" title="New game" onclick={() => gameStore.newGame()}>＋</button>
+  <button aria-label="New game" title="New game" onclick={requestNew}>＋</button>
 </nav>
 
 {#if settingsOpen}
@@ -164,6 +190,27 @@
       <p class="sub">Tap a card to auto-play its best move, or drag cards and runs yourself.</p>
       <div class="row">
         <button class="primary" onclick={() => (helpOpen = false)}>Got it</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if newConfirm}
+  <div class="overlay" role="dialog" aria-modal="true" aria-label="New game" tabindex="-1">
+    <div class="dialog">
+      <p class="q">Deal a new game?</p>
+      <p class="sub">Your current game will be abandoned.</p>
+      <div class="row">
+        <button
+          class="primary"
+          onclick={() => {
+            newConfirm = false;
+            gameStore.newGame();
+          }}
+        >
+          New game
+        </button>
+        <button onclick={() => (newConfirm = false)}>Keep playing</button>
       </div>
     </div>
   </div>

@@ -44,6 +44,9 @@ class GameStore {
   #autoDelay: ReturnType<typeof setTimeout> | null = null;
   /** Replay mode: the board shows a stored match, not a live game. */
   #replaying = $state(false);
+  /** Clock-pause reasons (modal open, tab hidden, …) — stacked, not boolean. */
+  readonly #pauseReasons = $state(new Set<string>());
+  #pauseBeganAt = $state(0);
   readonly #slots = $state<Partial<Record<VariantId, Slot>>>({});
   readonly #listeners = new Set<StateListener>();
   readonly #navListeners = new Set<NavListener>();
@@ -67,6 +70,45 @@ class GameStore {
   /** `true` while the board is replaying a stored match (input blocked). */
   get replaying(): boolean {
     return this.#replaying;
+  }
+
+  /** `true` while any pause reason holds — the play clock is frozen. */
+  get paused(): boolean {
+    return this.#pauseReasons.size > 0;
+  }
+
+  /** Wall-clock moment the current pause began (frozen-clock display). */
+  get pauseBeganAt(): number {
+    return this.#pauseBeganAt;
+  }
+
+  /**
+   * Pause/resume the play clock for `reason` ('settings', 'hidden', …).
+   * Reasons stack: the clock resumes only when the last one lifts, at
+   * which point `startedAt` shifts forward by the paused span — so
+   * `now - startedAt` stays correct without a separate accumulator.
+   */
+  setPaused(reason: string, on: boolean): void {
+    const had = this.#pauseReasons.size > 0;
+    if (on) this.#pauseReasons.add(reason);
+    else this.#pauseReasons.delete(reason);
+    const has = this.#pauseReasons.size > 0;
+    if (!had && has) this.#pauseBeganAt = Date.now();
+    if (had && !has) {
+      const s = this.#state;
+      const delta = Date.now() - this.#pauseBeganAt;
+      if (s && s.status === 'playing' && delta > 0) {
+        this.#state = { ...s, startedAt: s.startedAt + delta };
+      }
+    }
+  }
+
+  constructor() {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () =>
+        this.setPaused('hidden', document.hidden)
+      );
+    }
   }
 
   /** Variant id awaiting a "Save and switch?" decision, or null. */
@@ -275,10 +317,12 @@ class GameStore {
    *   5  tableau → tableau revealing a face-down card (Klondike)
    *   10 cell → tableau (frees a cell)
    *   20 waste/tableau → tableau (normal build)
+   *   35 whole King-headed column → empty column (cosmetic — players
+   *        expect a tapped King to fill the space anyway)
    *   40 foundation → tableau (take-back — legal, rarely wise)
    *   45 → cell (parks a card — spends a cell, almost never the right hint)
    *   50 draw
-   *   60 whole column → empty column (zero-sum relocation)
+   *   60 other whole column → empty column (zero-sum relocation)
    */
   #rankMove(m: Move): number {
     if (m.type === 'draw') return 50;
@@ -292,7 +336,7 @@ class GameStore {
       if (m.from.area === 'cell') return 10;
       if (m.from.area === 'foundation') return 40;
       if (m.from.area === 'tableau') {
-        if (srcIdx === 0 && toEmpty) return 60;
+        if (srcIdx === 0 && toEmpty) return srcPile?.[0].rank === 13 ? 35 : 60;
         if (srcPile && srcIdx > 0 && !srcPile[srcIdx - 1].faceUp) return 5;
       }
       return 20;
@@ -452,6 +496,11 @@ class GameStore {
 
   #commit(s: GameState): void {
     const prev = this.#state;
+    // The clock starts on the first move, not the deal — a fresh board
+    // sits at 0:00 until the player actually plays something.
+    if (s.moves.length === 1 && prev?.moves.length === 0) {
+      s = { ...s, startedAt: Date.now() };
+    }
     this.#state = s;
     for (const fn of this.#listeners) fn(s);
     if (this.#replaying) return; // replay: render only — no stats, no auto-finish
