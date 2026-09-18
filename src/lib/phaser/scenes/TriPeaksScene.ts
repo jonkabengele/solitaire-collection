@@ -100,9 +100,15 @@ export class TriPeaksScene extends Phaser.Scene {
     if (this.current) this.syncState(this.current);
   }
 
+  private lastDrawAt = 0;
+
   private tryDraw(): void {
     const s = this.current;
     if (!s || s.stock.length === 0) return;
+    // Dedup touch + emulated-mouse double pointerdown — one tap, one draw.
+    const now = this.time.now;
+    if (now - this.lastDrawAt < 350) return;
+    this.lastDrawAt = now;
     const ok = gameStore.dispatchMove({ type: 'draw' });
     playSfx(ok ? 'draw' : 'invalid');
     haptic(ok ? 'draw' : 'invalid');
@@ -149,8 +155,8 @@ export class TriPeaksScene extends Phaser.Scene {
         card: c,
         ref: { area: 'stock', index: 0 },
         pileIndex: i,
-        x: L.stock.x,
-        y: L.stock.y,
+        x: L.stock.x - Math.min(i, 4),
+        y: L.stock.y - Math.min(i, 4) * 0.6,
         depth: 200 + i,
         interactive: 'none'
       })

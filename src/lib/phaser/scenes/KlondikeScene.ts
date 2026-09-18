@@ -27,6 +27,7 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
   private dragCtl?: DragController;
   private swipeCtl?: SwipeController;
   private stockZone?: Phaser.GameObjects.Zone;
+  private lastDrawAt = 0;
   private unsub?: () => void;
   private unsubHint?: () => void;
   private dealtSeed?: string;
@@ -167,6 +168,11 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
       .zone(stockRect.centerX, stockRect.centerY, stockRect.width, stockRect.height)
       .setInteractive({ cursor: 'pointer' })
       .on('pointerdown', () => {
+        // One touch can surface as two pointerdowns (touch + emulated
+        // mouse) — draw exactly once per real tap, never auto-play.
+        const now = this.time.now;
+        if (now - this.lastDrawAt < 350) return;
+        this.lastDrawAt = now;
         playSfx('draw');
         haptic('draw');
         this.tryMove({ type: 'draw' });
@@ -184,8 +190,9 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
         card: c,
         ref: { area: 'stock', index: 0 },
         pileIndex: i,
-        x: L.stock.x,
-        y: L.stock.y,
+        // Offset each card a touch so the pile reads as a stack, not one card.
+        x: L.stock.x - Math.min(i, 4),
+        y: L.stock.y - Math.min(i, 4) * 0.6,
         depth: i,
         interactive: 'none'
       })

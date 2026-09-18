@@ -15,8 +15,12 @@ class UiStore {
   );
   statsOpen = $state(false);
   aboutOpen = $state(false);
+  /** Standalone settings overlay — sidenav entry, outside a game. */
+  settingsOpen = $state(false);
   /** Race lobby overlay (matchmaking / result). In-race HUD lives in Race.svelte. */
   raceOpen = $state(false);
+  /** Race picker — pick a game to launch a solo practice race on. */
+  raceLobbyOpen = $state(false);
   /** Social overlay (leaderboards / friends / history / profile). */
   socialOpen = $state(false);
 }

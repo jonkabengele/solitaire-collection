@@ -4,8 +4,10 @@
   import HUD from './lib/ui/HUD.svelte';
   import Menu from './lib/ui/Menu.svelte';
   import Stats from './lib/ui/Stats.svelte';
+  import Settings from './lib/ui/Settings.svelte';
   import About from './lib/ui/About.svelte';
   import Race from './lib/ui/Race.svelte';
+  import RaceLobby from './lib/ui/RaceLobby.svelte';
   import Social from './lib/ui/Social.svelte';
   import Replay from './lib/ui/Replay.svelte';
   import InstallBanner from './lib/ui/InstallBanner.svelte';
@@ -119,6 +121,18 @@
   <Menu />
 {/if}
 
+<!-- The in-HUD ☰ is gone on the menu screen, so a closed drawer would be
+     unreachable — this floating toggle covers that gap. -->
+{#if uiStore.menuOpen && !uiStore.navOpen}
+  <button class="nav-toggle" title="Menu" aria-label="Menu" onclick={() => (uiStore.navOpen = true)}>
+    ☰
+  </button>
+{/if}
+
+{#if uiStore.settingsOpen}
+  <Settings />
+{/if}
+
 {#if uiStore.statsOpen}
   <Stats />
 {/if}
@@ -128,6 +142,10 @@
 {/if}
 
 <Race />
+
+{#if uiStore.raceLobbyOpen}
+  <RaceLobby />
+{/if}
 
 {#if uiStore.socialOpen}
   <Social />
@@ -162,5 +180,25 @@
 
   .game :global(canvas) {
     display: block;
+  }
+
+  .nav-toggle {
+    position: fixed;
+    top: calc(0.75rem + var(--sat));
+    left: calc(0.75rem + var(--sal));
+    z-index: 40;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.55);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 1.1rem;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+  }
+
+  .nav-toggle:hover {
+    background: rgba(0, 0, 0, 0.75);
   }
 </style>

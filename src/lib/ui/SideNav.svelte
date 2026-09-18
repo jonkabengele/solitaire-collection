@@ -9,16 +9,8 @@
   import type { VariantId } from '../engine/types.js';
   import { gameStore } from '../stores/gameStore.svelte.js';
   import { uiStore } from '../stores/ui.svelte.js';
-  import { practiceStore } from '../stores/practice.svelte.js';
   import { RACE_AVAILABLE } from '../net/nakama.js';
-
-  const GAMES: { id: VariantId; icon: string; name: string; blurb: string }[] = [
-    { id: 'klondike', icon: '♛', name: 'Klondike', blurb: 'The classic' },
-    { id: 'freecell', icon: '♞', name: 'FreeCell', blurb: 'Pure skill' },
-    { id: 'tripeaks', icon: '⛰', name: 'TriPeaks', blurb: 'Clear the peaks' },
-    { id: 'pyramid', icon: '🔺', name: 'Pyramid', blurb: 'Pairs to thirteen' },
-    { id: 'spider', icon: '🕷', name: 'Spider', blurb: 'Two decks, ten columns' }
-  ];
+  import { GAMES } from './games.js';
 
   /** Phones overlay the drawer; desktop keeps it docked. */
   function narrow(): boolean {
@@ -40,9 +32,8 @@
   }
 
   function practice(): void {
-    if (cur === null) return;
-    gameStore.newGame(cur);
-    practiceStore.start();
+    // The lobby lists every game — launching one starts the race there.
+    uiStore.raceLobbyOpen = true;
     closeOnMobile();
   }
 
@@ -60,6 +51,14 @@
     <button class="x" aria-label="Close menu" onclick={() => (uiStore.navOpen = false)}>✕</button>
   </div>
 
+  <button class="item" class:active={uiStore.menuOpen} onclick={() => { gameStore.openMenu(); closeOnMobile(); }}>
+    <span class="icon" aria-hidden="true">🏠</span>
+    <span class="label">
+      <span class="name">Home</span>
+      <span class="blurb">All games & tiers</span>
+    </span>
+  </button>
+
   <p class="section">GAMES</p>
   {#each GAMES as g (g.id)}
     <button class="item" class:active={cur === g.id} onclick={() => pick(g.id)}>
@@ -75,11 +74,11 @@
   {/each}
 
   <p class="section">MODES</p>
-  <button class="item" onclick={practice} disabled={cur === null}>
+  <button class="item" onclick={practice}>
     <span class="icon" aria-hidden="true">⏱</span>
     <span class="label">
-      <span class="name">Practice Race</span>
-      <span class="blurb">Solo · beat the 5:00 clock</span>
+      <span class="name">Race</span>
+      <span class="blurb">Pick a game · beat the 5:00 clock</span>
     </span>
   </button>
   {#if RACE_AVAILABLE}
@@ -102,6 +101,7 @@
   <div class="spacer"></div>
 
   <p class="section">MORE</p>
+  <button class="link" onclick={() => { uiStore.settingsOpen = true; closeOnMobile(); }}>Settings</button>
   <button class="link" onclick={() => { uiStore.statsOpen = true; closeOnMobile(); }}>Statistics</button>
   <button class="link" onclick={() => { uiStore.aboutOpen = true; closeOnMobile(); }}>About</button>
 </nav>

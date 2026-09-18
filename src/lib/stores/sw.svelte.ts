@@ -10,7 +10,7 @@
 
 import { registerSW } from 'virtual:pwa-register';
 
-export type SwUpdateState = 'idle' | 'checking' | 'none' | 'ready' | 'applying';
+export type SwUpdateState = 'idle' | 'checking' | 'none' | 'ready' | 'applying' | 'unsupported';
 
 let updateSW: ((reloadPage?: boolean) => Promise<void>) | null = null;
 
@@ -39,7 +39,9 @@ export async function checkForUpdates(): Promise<void> {
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     if (!reg) {
-      swStore.update = 'none';
+      // No SW = dev/uninstalled build — there is nothing to update, and
+      // reporting 'none' would falsely claim the app is current.
+      swStore.update = 'unsupported';
       return;
     }
     if (reg.waiting) {

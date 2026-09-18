@@ -80,6 +80,10 @@ export class DragController {
   ): void {
     if (!(go instanceof CardSprite)) return;
     if (!this.onCanvas(pointer)) return;
+    // A card still tweening to its pile isn't grabbable — it can look like
+    // it's under the pointer (e.g. a freshly drawn card hasn't left the
+    // stock yet) but its position is transitional, not real.
+    if (go.moveTween) return;
     haptic('pickup');
     this.group = this.host.runSprites(go.ref, go.pileIndex);
     if (!this.group.includes(go)) this.group = [go];
@@ -126,6 +130,9 @@ export class DragController {
   private onPointerUp(pointer: Phaser.Input.Pointer, go: Phaser.GameObjects.GameObject): void {
     if (!(go instanceof CardSprite)) return;
     if (!this.onCanvas(pointer)) return;
+    // A covered card is never playable — taps on it must do nothing, so a
+    // stock/facedown hit can never read as an auto-play.
+    if (!go.faceUp) return;
     if (pointer.getDistance() > TAP_MAX_DIST) return;
     if (pointer.upTime - pointer.downTime > TAP_MAX_MS) return;
     // Emulated-mouse duplicates: same card, near-same moment → ignore.

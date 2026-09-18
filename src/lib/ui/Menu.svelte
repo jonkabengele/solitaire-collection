@@ -130,6 +130,7 @@
       <button class="race-link" onclick={() => (uiStore.raceOpen = true)}>⚔ RACE</button>
       <button class="stats-link" onclick={() => (uiStore.socialOpen = true)}>SOCIAL</button>
     {/if}
+    <button class="stats-link" onclick={() => (uiStore.settingsOpen = true)}>SETTINGS</button>
     <button class="stats-link" onclick={() => (uiStore.statsOpen = true)}>STATISTICS</button>
     <button class="stats-link" onclick={() => (uiStore.aboutOpen = true)}>ABOUT</button>
   </div>
@@ -144,7 +145,7 @@
     flex-direction: column;
     align-items: center;
     background: #0b3d2e;
-    padding: calc(var(--sat) + 1rem) 1rem calc(var(--sab) + 1rem);
+    padding: calc(var(--sat) + 1rem) 0.5rem calc(var(--sab) + 1rem);
     user-select: none;
   }
 
@@ -163,13 +164,18 @@
     color: rgba(255, 255, 255, 0.7);
   }
 
-  /* The tiers scroll under a fixed title/footer. */
+  /* The tiers scroll under a fixed title/footer. Scrollbar stays
+     invisible — full bleed, narrow gutters. */
   .scroll {
     flex: 1;
-    width: min(56rem, 100%);
+    width: 100%;
     overflow-y: auto;
-    padding: 0.8rem 0.2rem;
-    scrollbar-width: thin;
+    padding: 0.8rem 0.25rem;
+    scrollbar-width: none;
+  }
+
+  .scroll::-webkit-scrollbar {
+    display: none;
   }
 
   .tier {

@@ -1,9 +1,8 @@
 <script lang="ts">
   import type { VariantId } from '../engine/types.js';
   import { gameStore } from '../stores/gameStore.svelte.js';
-  import { settingsStore } from '../stores/settings.svelte.js';
   import { uiStore } from '../stores/ui.svelte.js';
-  import { swStore, checkForUpdates, applyUpdate } from '../stores/sw.svelte.js';
+  import SettingsPanel from './SettingsPanel.svelte';
   import { practiceStore } from '../stores/practice.svelte.js';
   import { statsStore } from '../stores/stats.svelte.js';
   import { getVariant } from '../variants/index.js';
@@ -176,6 +175,9 @@
     <button class="wide" onclick={() => gameStore.undo()} disabled={!gameStore.canUndo}>Undo</button>
     <button class="wide" onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>Redo</button>
     <button class="wide" onclick={requestNew}>New</button>
+    {#if racing}
+      <button class="wide" onclick={() => practiceStore.stop()}>End race</button>
+    {/if}
     <button class="ghost" title="Statistics" aria-label="Statistics" onclick={() => (uiStore.statsOpen = true)}>📊</button>
     <button class="ghost" title="How to play" aria-label="How to play" onclick={() => (helpOpen = true)}>?</button>
     <button class="ghost" title="Pause" aria-label="Pause" onclick={() => (settingsOpen = true)}>⏸</button>
@@ -194,36 +196,7 @@
   <div class="overlay" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
     <div class="dialog">
       <p class="q">Paused</p>
-      <label class="slider-row">
-        <span>Sound</span>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={Math.round(settingsStore.volume * 100)}
-          oninput={(e) => (settingsStore.volume = Number(e.currentTarget.value) / 100)}
-        />
-        <span class="vol">{Math.round(settingsStore.volume * 100)}%</span>
-      </label>
-      <div class="slider-row">
-        <span>App</span>
-        {#if swStore.update === 'ready'}
-          <button class="primary update-btn" onclick={applyUpdate}>Update ready — apply</button>
-        {:else}
-          <button
-            class="ghost update-btn"
-            onclick={checkForUpdates}
-            disabled={swStore.update === 'checking' || swStore.update === 'applying'}
-          >
-            {swStore.update === 'checking' ? 'Checking…' : swStore.update === 'applying' ? 'Updating…' : 'Check Updates'}
-          </button>
-        {/if}
-      </div>
-      {#if swStore.update === 'none'}
-        <p class="update-hint">You're on the latest version.</p>
-      {:else if swStore.update === 'ready'}
-        <p class="update-hint">A new version is ready — applying reloads the app.</p>
-      {/if}
+      <SettingsPanel />
       <div class="row">
         <button class="primary" onclick={() => (settingsOpen = false)}>Resume</button>
         <button class="danger" onclick={() => (quitConfirm = true)}>Quit game</button>
@@ -235,18 +208,18 @@
 {#if quitConfirm}
   <div class="overlay" role="dialog" aria-modal="true" aria-label="Quit game" tabindex="-1">
     <div class="dialog">
-      <p class="q">Quit to the menu?</p>
-      <p class="sub">Your game is saved — you can resume it anytime.</p>
+      <p class="q">End this game?</p>
+      <p class="sub">Quitting resolves the game — an unfinished board counts as a loss.</p>
       <div class="row">
         <button
           class="primary"
           onclick={() => {
             quitConfirm = false;
             settingsOpen = false;
-            gameStore.openMenu();
+            gameStore.quitGame();
           }}
         >
-          Quit
+          End game
         </button>
         <button onclick={() => (quitConfirm = false)}>Keep playing</button>
       </div>
@@ -273,7 +246,7 @@
           onclick={() => {
             practiceStore.stop();
             settingsOpen = false;
-            gameStore.openMenu();
+            gameStore.quitGame();
           }}
         >
           Quit
@@ -495,41 +468,6 @@
     color: #ffb4ba;
   }
 
-  .slider-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-top: 0.9rem;
-    font-size: 0.85rem;
-  }
-
-  .slider-row input[type='range'] {
-    flex: 1;
-    accent-color: #ffd166;
-  }
-
-  .vol {
-    min-width: 2.6rem;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .slider-row span:first-child {
-    flex: 1;
-  }
-
-  .update-btn {
-    font-size: 0.8rem;
-    padding: 0.4rem 0.7rem;
-  }
-
-  .update-hint {
-    margin: 0.4rem 0 0;
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.55);
-  }
-
   .dialog.help {
     max-width: 22rem;
     text-align: left;
@@ -593,14 +531,14 @@
 
   @media (max-width: 620px) {
     .hud {
-      gap: 0.35rem;
-      padding: 0.4rem 0.45rem;
-      font-size: 0.8rem;
+      gap: 0.45rem;
+      padding: 0.6rem 0.6rem;
+      font-size: 0.95rem;
     }
 
     .stats {
-      gap: 0.45rem;
-      font-size: 0.75rem;
+      gap: 0.6rem;
+      font-size: 0.9rem;
     }
 
     /* Text action buttons move to the bottom thumb bar as icons. */
@@ -608,19 +546,25 @@
       display: none;
     }
 
+    /* Ghost icons (☰ 📊 ? ⏸) need real touch targets too. */
+    .actions .ghost {
+      padding: 0.5rem 0.7rem;
+      font-size: 1.1rem;
+    }
+
     .actionbar {
       display: flex;
       justify-content: space-evenly;
       gap: 0.5rem;
-      padding: 0.35rem 0.6rem;
+      padding: 0.5rem 0.6rem;
       background: rgba(0, 0, 0, 0.22);
     }
 
     .actionbar button {
       flex: 1;
-      max-width: 6rem;
-      min-height: 48px;
-      font-size: 1.25rem;
+      max-width: 7rem;
+      min-height: 56px;
+      font-size: 1.4rem;
       line-height: 1;
       border-radius: 12px;
     }

@@ -238,6 +238,21 @@ class GameStore {
   }
 
   /**
+   * End the live game and go to the menu. Quit is not suspend — an
+   * unfinished game resolves as a loss (the commit hooks it into stats
+   * like any other lost game) so dead boards can't linger "in progress"
+   * forever. A game with no moves played yet is simply abandoned.
+   */
+  quitGame(): void {
+    const cur = this.#state;
+    if (cur !== null && cur.status === 'playing' && cur.moves.length > 0) {
+      this.#slots[cur.variant] = undefined;
+      this.#commit({ ...cur, status: 'lost' });
+    }
+    this.openMenu();
+  }
+
+  /**
    * Route a move through the single `applyMove` pathway. Returns `false`
    * when the engine rejected it (illegal move → same object back).
    * No-ops during replay — the board is read-only then.

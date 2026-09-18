@@ -37,6 +37,7 @@ export class SpiderScene extends Phaser.Scene implements DragHost {
   private dragCtl?: DragController;
   private swipeCtl?: SwipeController;
   private stockZone?: Phaser.GameObjects.Zone;
+  private lastDrawAt = 0;
   private unsub?: () => void;
   private unsubHint?: () => void;
   private dealtSeed?: string;
@@ -172,6 +173,10 @@ export class SpiderScene extends Phaser.Scene implements DragHost {
       .zone(stockRect.centerX, stockRect.centerY, stockRect.width, stockRect.height)
       .setInteractive({ cursor: 'pointer' })
       .on('pointerdown', () => {
+        // Dedup touch + emulated-mouse double pointerdown — one tap, one deal.
+        const now = this.time.now;
+        if (now - this.lastDrawAt < 350) return;
+        this.lastDrawAt = now;
         playSfx('draw');
         haptic('draw');
         this.tryMove({ type: 'draw' });
@@ -189,8 +194,8 @@ export class SpiderScene extends Phaser.Scene implements DragHost {
         card: c,
         ref: { area: 'stock', index: 0 },
         pileIndex: i,
-        x: L.stock.x,
-        y: L.stock.y,
+        x: L.stock.x - Math.min(i, 4),
+        y: L.stock.y - Math.min(i, 4) * 0.6,
         depth: i,
         interactive: 'none'
       })

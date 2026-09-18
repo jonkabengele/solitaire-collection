@@ -79,7 +79,10 @@ export function syncSprites(
             duration: DEAL_MS,
             delay: (t.dealOrder ?? 0) * DEAL_STAGGER,
             ease: 'Cubic.easeOut',
-            onComplete: () => spr.setDepth(t.depth)
+            onComplete: () => {
+              spr.moveTween = undefined;
+              spr.setDepth(t.depth);
+            }
           });
         } else {
           spr.setPosition(t.x, t.y);
@@ -93,7 +96,8 @@ export function syncSprites(
           y: t.y,
           duration: PLACE_MS,
           ease: 'Back.easeOut',
-          easeParams: [0.5] // ~5% overshoot
+          easeParams: [0.5], // ~5% overshoot
+          onComplete: () => (spr.moveTween = undefined)
         });
         spr.setDepth(t.depth);
       } else {
