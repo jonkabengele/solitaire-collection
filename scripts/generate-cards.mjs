@@ -26,19 +26,20 @@ function corner(rank, suit, x, y) {
   const { glyph, color } = SUITS[suit];
   return `
     <text x="${x}" y="${y}" font-size="42" text-anchor="middle" fill="${color}">${rank}</text>
-    <text x="${x}" y="${y + 34}" font-size="32" text-anchor="middle" fill="${color}">${glyph}</text>`;
+    <text x="${W - x}" y="${y}" font-size="36" text-anchor="middle" fill="${color}">${glyph}</text>`;
 }
 
 function face(suit, rank) {
   const { glyph, color } = SUITS[suit];
   const label = rankLabel(rank);
-  // Reference design: one top-left corner index + a giant centred suit
-  // glyph. No rotated bottom corner — stacked cards only show the top.
+  // Reference design: top-left rank index, matching suit glyph top-right,
+  // and a giant centred suit. No rotated bottom corner — stacked cards
+  // only show the top.
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">
   <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="#fdfdfb" stroke="#c4c7c0" stroke-width="2"/>
   <g font-family="Arial,Helvetica,sans-serif" font-weight="700">
     ${corner(label, suit, 27, 44)}
-    <text x="${W / 2}" y="${H / 2 + 44}" font-size="120" text-anchor="middle" fill="${color}">${glyph}</text>
+    <text x="${W / 2}" y="${H / 2 + 50}" font-size="140" text-anchor="middle" fill="${color}">${glyph}</text>
   </g>
 </svg>
 `;
