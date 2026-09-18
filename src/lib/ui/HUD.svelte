@@ -20,6 +20,39 @@
   });
 
   let settingsOpen = $state(false);
+  let helpOpen = $state(false);
+
+  const RULES: Record<VariantId, { title: string; lines: string[] }> = {
+    klondike: {
+      title: 'How to play Klondike',
+      lines: [
+        'Goal: build all four foundations from Ace up to King, by suit.',
+        'Tableau columns build downward in alternating colours — a red 7 goes on a black 8.',
+        'Only a King can fill an empty column.',
+        'Tap the deck to draw a card.',
+        'Face-down cards flip over when you uncover them.'
+      ]
+    },
+    freecell: {
+      title: 'How to play FreeCell',
+      lines: [
+        'Goal: build all four foundations from Ace up to King, by suit.',
+        'Every card is face-up — the puzzle is planning, not luck.',
+        'The four free cells (top-left) each hold one card; they are your workspace.',
+        'Columns build downward in alternating colours; an empty column takes any card.',
+        'A run can only move if your free cells and empty columns leave enough room.'
+      ]
+    },
+    tripeaks: {
+      title: 'How to play TriPeaks',
+      lines: [
+        'Goal: clear all three peaks.',
+        'Tap an uncovered card that is one rank higher or lower than the waste card — chains wrap, so Ace plays on King.',
+        'No playable card? Tap the stock to draw — it is limited, so spend it wisely.',
+        'Clearing a card can uncover the ones beneath it; long chains are the fastest way up.'
+      ]
+    }
+  };
 
   const cur = $derived(gameStore.state);
   const pending = $derived(gameStore.pendingSwitch);
@@ -65,6 +98,7 @@
     <button class="wide" onclick={() => gameStore.redo()} disabled={!gameStore.canRedo}>Redo</button>
     <button class="wide" onclick={() => gameStore.newGame()}>New</button>
     <button class="ghost" title="Statistics" aria-label="Statistics" onclick={() => (uiStore.statsOpen = true)}>📊</button>
+    <button class="ghost" title="How to play" aria-label="How to play" onclick={() => (helpOpen = true)}>?</button>
     <button class="ghost" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>⚙</button>
   </div>
 </header>
@@ -113,6 +147,23 @@
       {/if}
       <div class="row">
         <button class="primary" onclick={() => (settingsOpen = false)}>Done</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if helpOpen}
+  <div class="overlay" role="dialog" aria-modal="true" aria-label="How to play" tabindex="-1">
+    <div class="dialog help">
+      <p class="q">{RULES[cur.variant].title}</p>
+      <ul class="rules">
+        {#each RULES[cur.variant].lines as line (line)}
+          <li>{line}</li>
+        {/each}
+      </ul>
+      <p class="sub">Tap a card to auto-play its best move, or drag cards and runs yourself.</p>
+      <div class="row">
+        <button class="primary" onclick={() => (helpOpen = false)}>Got it</button>
       </div>
     </div>
   </div>
@@ -294,6 +345,27 @@
     margin: 0.4rem 0 0;
     font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.55);
+  }
+
+  .dialog.help {
+    max-width: 22rem;
+    text-align: left;
+  }
+
+  .dialog.help .q {
+    text-align: center;
+  }
+
+  .rules {
+    margin: 0.6rem 0 0;
+    padding-left: 1.1rem;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .rules li + li {
+    margin-top: 0.3rem;
   }
 
   @media (max-width: 620px) {

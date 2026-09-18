@@ -233,9 +233,8 @@ class GameStore {
   }
 
   /**
-   * Suggest a move: foundations first (safest progress), then moves that
-   * build on non-empty tableau columns, then anything else; draws last.
-   * Emitted on the hint channel for the active scene to highlight.
+   * Suggest a move: the best-ranked legal move goes to the hint channel
+   * for the active scene to highlight. See `#rankMove` for the ordering.
    */
   requestHint(): void {
     if (this.state.status !== 'playing') {
@@ -243,14 +242,63 @@ class GameStore {
       return;
     }
     const ms = this.legalMoves();
-    const rank = (m: Move): number => {
-      if (m.type === 'draw') return 4;
-      if (m.to.area === 'foundation') return 0;
-      if (m.from.area === 'tableau' && m.to.area === 'tableau') return 1;
-      if (m.to.area === 'cell') return 2;
-      return 3;
-    };
-    this.#emitHint(ms.slice().sort((a, b) => rank(a) - rank(b))[0] ?? null);
+    this.#emitHint(ms.slice().sort((a, b) => this.#rankMove(a) - this.#rankMove(b))[0] ?? null);
+  }
+
+  /**
+   * Tap-to-move: the best "safe" move for `cardId` — foundation, a
+   * reveal, or a useful tableau build. Returns null when the card has no
+   * move worth auto-playing (cell parking, pointless column relocations
+   * and take-backs stay manual, so a tap never burns a free cell or
+   * shuffles a column sideways).
+   */
+  autoMoveFor(cardId: string): Move | null {
+    const ms = this.legalMoves().filter((m) => m.type === 'move' && m.cardId === cardId);
+    if (ms.length === 0) return null;
+    const best = ms.sort((a, b) => this.#rankMove(a) - this.#rankMove(b))[0];
+    return this.#rankMove(best) < 40 ? best : null;
+  }
+
+  /** Cards with at least one legal move — the "what can I move?" pulse. */
+  movableCardIds(): Set<string> {
+    return new Set(
+      this.legalMoves()
+        .filter((m): m is Extract<Move, { type: 'move' }> => m.type === 'move')
+        .map((m) => m.cardId)
+    );
+  }
+
+  /**
+   * Hint quality ordering (lower = better):
+   *   0  cell → foundation (frees a cell and progresses)
+   *   1  → foundation
+   *   5  tableau → tableau revealing a face-down card (Klondike)
+   *   10 cell → tableau (frees a cell)
+   *   20 waste/tableau → tableau (normal build)
+   *   40 foundation → tableau (take-back — legal, rarely wise)
+   *   45 → cell (parks a card — spends a cell, almost never the right hint)
+   *   50 draw
+   *   60 whole column → empty column (zero-sum relocation)
+   */
+  #rankMove(m: Move): number {
+    if (m.type === 'draw') return 50;
+    const s = this.state;
+    if (m.to.area === 'foundation') return m.from.area === 'cell' ? 0 : 1;
+    const hasColumns = s.variant === 'klondike' || s.variant === 'freecell';
+    const srcPile = hasColumns && m.from.area === 'tableau' ? s.tableau[m.from.index] : null;
+    const srcIdx = srcPile ? srcPile.findIndex((c) => c.id === m.cardId) : -1;
+    if (m.to.area === 'tableau') {
+      const toEmpty = hasColumns && s.tableau[m.to.index].length === 0;
+      if (m.from.area === 'cell') return 10;
+      if (m.from.area === 'foundation') return 40;
+      if (m.from.area === 'tableau') {
+        if (srcIdx === 0 && toEmpty) return 60;
+        if (srcPile && srcIdx > 0 && !srcPile[srcIdx - 1].faceUp) return 5;
+      }
+      return 20;
+    }
+    if (m.to.area === 'cell') return 45;
+    return 55;
   }
 
   /** Subscribe to hint suggestions. Returns unsubscribe. */

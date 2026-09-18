@@ -17,8 +17,8 @@ export interface DragHost {
   pileAt(x: number, y: number): PileRef | undefined;
   /** Dispatch a move; the host resyncs sprites either way (snap-back on reject). */
   tryMove(move: Move): void;
-  /** Attempt a legal move sending `sprite`'s card to a foundation (double-tap). */
-  tryAutoFoundation(sprite: CardSprite): void;
+  /** Attempt the best safe auto-move for `sprite`'s card on a quick tap. */
+  tryAutoMove(sprite: CardSprite): void;
   /** Reposition every sprite to canonical state. */
   resync(): void;
   /** Mark card ids mid-drag so state syncs skip them. */
@@ -101,11 +101,11 @@ export class DragController {
     }
   }
 
-  /** Tap detection → a quick tap sends the card to its foundation when legal. */
+  /** Tap detection → a quick tap auto-plays the card's best safe move. */
   private onPointerUp(pointer: Phaser.Input.Pointer, go: Phaser.GameObjects.GameObject): void {
     if (!(go instanceof CardSprite)) return;
     if (pointer.getDistance() > TAP_MAX_DIST) return;
     if (pointer.upTime - pointer.downTime > TAP_MAX_MS) return;
-    this.host.tryAutoFoundation(go);
+    this.host.tryAutoMove(go);
   }
 }

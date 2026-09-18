@@ -24,8 +24,10 @@ export type FreeCellLayout = {
   tableauX: number[];
   /** Top edge y of the cascade row (first card's top). */
   tableauTop: number;
-  /** Vertical gap per face-up cascade card. */
-  upGap: number;
+  /** Strip shown of the face-up card under the cascade top — index readable. */
+  indexGap: number;
+  /** Strip shown of a buried cascade card — a bare edge, index hidden. */
+  buriedGap: number;
   /** Reserved space below the tallest cascade. */
   bottomPad: number;
   /** Drop targets: cells, foundations, then tableau bands. */
@@ -100,7 +102,8 @@ export function computeFreeCellLayout(width: number, height: number): FreeCellLa
     foundations,
     tableauX: Array.from({ length: COLS }, (_, i) => colX(i)),
     tableauTop,
-    upGap: cardH * 0.35,
+    indexGap: cardH * 0.24,
+    buriedGap: cardH * 0.10,
     bottomPad: Math.max(8, height * 0.015),
     zones
   };

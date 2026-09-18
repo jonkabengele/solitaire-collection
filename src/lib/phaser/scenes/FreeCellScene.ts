@@ -15,6 +15,7 @@ import { DragController, type DragHost } from '../objects/DragController.js';
 import { syncSprites, shakeCard, type Target } from '../objects/spriteSync.js';
 import { SwipeController } from '../objects/SwipeController.js';
 import { hintFx, type HintRect } from '../objects/hintFx.js';
+import { winFx } from '../objects/winFx.js';
 import { bindSfx, playSfx } from '../sfx.js';
 import { haptic } from '../haptics.js';
 
@@ -41,6 +42,8 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
   private unsub?: () => void;
   private unsubHint?: () => void;
   private dealtSeed?: string;
+  private flourishing = false;
+  private winCancel?: () => void;
 
   constructor() {
     super('freecell');
@@ -71,6 +74,7 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
 
   /** The grabbed card plus every card on top of it (a cascade run). */
   runSprites(ref: PileRef, pileIndex: number): CardSprite[] {
+    if (this.flourishing) return [];
     const pile = this.pileCards(ref);
     if (!pile) return [];
     return pile
@@ -90,14 +94,29 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
     this.resync();
   }
 
-  tryAutoFoundation(sprite: CardSprite): void {
-    const move = gameStore
-      .legalMoves()
-      .find(
-        (m) => m.type === 'move' && m.cardId === sprite.cardId && m.to.area === 'foundation'
-      );
-    if (move) this.tryMove(move);
-    else shakeCard(this, sprite);
+  tryAutoMove(sprite: CardSprite): void {
+    if (this.flourishing) return;
+    const move = gameStore.autoMoveFor(sprite.cardId);
+    if (move) {
+      this.tryMove(move);
+      return;
+    }
+    // Nothing worth auto-playing: shake, then pulse every card that does
+    // have a legal move so the tap doubles as a quiet "what now?".
+    shakeCard(this, sprite);
+    playSfx('invalid');
+    haptic('invalid');
+    const rects: HintRect[] = [];
+    for (const id of gameStore.movableCardIds()) {
+      const spr = this.sprites.get(id);
+      if (spr) {
+        const isSlot = spr.ref.area === 'cell' || spr.ref.area === 'foundation';
+        const w = isSlot ? this.layout.slotW : this.layout.cardW;
+        const h = isSlot ? this.layout.slotH : this.layout.cardH;
+        rects.push({ x: spr.x, y: spr.y, w, h });
+      }
+    }
+    if (rects.length > 0) hintFx(this, rects);
   }
 
   resync(): void {
@@ -116,10 +135,21 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
   private onState(s: GameState): void {
     if (s.variant !== 'freecell') return;
     this.current = s;
+    // A new deal/undo mid-flourish cancels the celebration and resyncs.
+    if (this.flourishing && s.status !== 'won') {
+      this.winCancel?.();
+      return; // the flourish's onDone resyncs with the latest state
+    }
     this.syncState(s);
-    if (s.status === 'won') {
+    if (s.status === 'won' && !this.flourishing && !gameStore.replaying) {
       playSfx('win');
       haptic('win');
+      this.flourishing = true;
+      this.winCancel = winFx(this, [...this.sprites.values()], () => {
+        this.flourishing = false;
+        this.winCancel = undefined;
+        if (this.sys.isActive()) this.resync();
+      });
     }
   }
 
@@ -184,16 +214,23 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
       )
     );
     s.tableau.forEach((col, ci) => {
-      const need = L.cardH + (col.length - 1) * L.upGap;
+      // Compact stacking: only the cascade top and the card under it show
+      // their index; deeper cards collapse to edge slivers.
+      const prevUp = col.length - 2;
+      const gapAbove = (i: number): number => (i - 1 === prevUp ? L.indexGap : L.buriedGap);
+      let need = L.cardH;
+      for (let i = 1; i < col.length; i++) need += gapAbove(i);
       const avail = this.scale.height - L.tableauTop - L.cardH - L.bottomPad;
-      const k = col.length > 1 ? Math.max(0.2, Math.min(1, (avail - L.cardH) / (need - L.cardH))) : 1;
+      const k = need > L.cardH ? Math.max(0.2, Math.min(1, (avail - L.cardH) / (need - L.cardH))) : 1;
+      let y = L.tableauTop + L.cardH / 2;
       col.forEach((c, i) => {
+        if (i > 0) y += gapAbove(i) * k;
         out.push({
           card: c,
           ref: { area: 'tableau', index: ci },
           pileIndex: i,
           x: L.tableauX[ci],
-          y: L.tableauTop + L.cardH / 2 + i * L.upGap * k,
+          y,
           depth: 300 + ci * 40 + i,
           interactive: isValidRun(col, i) ? ('drag' as const) : ('none' as const),
           dealOrder: i * 7 + ci
@@ -236,6 +273,7 @@ export class FreeCellScene extends Phaser.Scene implements DragHost {
   }
 
   private dispose(): void {
+    this.winCancel?.();
     this.unsub?.();
     this.unsubHint?.();
     this.dragCtl?.destroy();

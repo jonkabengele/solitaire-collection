@@ -25,8 +25,10 @@ export type BoardLayout = {
   tableauTop: number;
   /** Vertical gap contributed by a face-down card. */
   downGap: number;
-  /** Vertical gap contributed by a face-up card. */
-  upGap: number;
+  /** Strip shown of a face-up card that needs a readable index (the card under the top). */
+  indexGap: number;
+  /** Strip shown of a buried face-up card — a bare edge, index hidden. */
+  buriedGap: number;
   /** Reserved space below the tallest tableau column. */
   bottomPad: number;
   /** Drop targets, foundations first (top row wins over tableau bands). */
@@ -97,7 +99,8 @@ export function computeLayout(width: number, height: number): BoardLayout {
     tableauX: Array.from({ length: COLS }, (_, i) => colX(i)),
     tableauTop,
     downGap: cardH * 0.16,
-    upGap: cardH * 0.36,
+    indexGap: cardH * 0.24,
+    buriedGap: cardH * 0.10,
     bottomPad: Math.max(8, height * 0.015),
     zones
   };

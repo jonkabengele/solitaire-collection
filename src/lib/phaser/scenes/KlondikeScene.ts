@@ -14,6 +14,7 @@ import { DragController, type DragHost } from '../objects/DragController.js';
 import { syncSprites, shakeCard, type Target } from '../objects/spriteSync.js';
 import { SwipeController } from '../objects/SwipeController.js';
 import { hintFx, type HintRect } from '../objects/hintFx.js';
+import { winFx } from '../objects/winFx.js';
 import { bindSfx, playSfx } from '../sfx.js';
 import { haptic } from '../haptics.js';
 
@@ -29,6 +30,8 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
   private unsub?: () => void;
   private unsubHint?: () => void;
   private dealtSeed?: string;
+  private flourishing = false;
+  private winCancel?: () => void;
 
   constructor() {
     super('klondike');
@@ -60,6 +63,7 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
 
   /** The grabbed card plus every card on top of it (a tableau run). */
   runSprites(ref: PileRef, pileIndex: number): CardSprite[] {
+    if (this.flourishing) return [];
     const pile = this.pileCards(ref);
     if (!pile) return [];
     return pile
@@ -79,14 +83,24 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
     this.resync();
   }
 
-  tryAutoFoundation(sprite: CardSprite): void {
-    const move = gameStore
-      .legalMoves()
-      .find(
-        (m) => m.type === 'move' && m.cardId === sprite.cardId && m.to.area === 'foundation'
-      );
-    if (move) this.tryMove(move);
-    else shakeCard(this, sprite);
+  tryAutoMove(sprite: CardSprite): void {
+    if (this.flourishing) return;
+    const move = gameStore.autoMoveFor(sprite.cardId);
+    if (move) {
+      this.tryMove(move);
+      return;
+    }
+    // Nothing worth auto-playing: shake, then pulse every card that does
+    // have a legal move so the tap doubles as a quiet "what now?".
+    shakeCard(this, sprite);
+    playSfx('invalid');
+    haptic('invalid');
+    const rects: HintRect[] = [];
+    for (const id of gameStore.movableCardIds()) {
+      const spr = this.sprites.get(id);
+      if (spr) rects.push({ x: spr.x, y: spr.y, w: this.layout.cardW, h: this.layout.cardH });
+    }
+    if (rects.length > 0) hintFx(this, rects);
   }
 
   resync(): void {
@@ -105,10 +119,21 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
   private onState(s: GameState): void {
     if (s.variant !== 'klondike') return;
     this.current = s;
+    // A new deal/undo mid-flourish cancels the celebration and resyncs.
+    if (this.flourishing && s.status !== 'won') {
+      this.winCancel?.();
+      return; // the flourish's onDone resyncs with the latest state
+    }
     this.syncState(s);
-    if (s.status === 'won') {
+    if (s.status === 'won' && !this.flourishing && !gameStore.replaying) {
       playSfx('win');
       haptic('win');
+      this.flourishing = true;
+      this.winCancel = winFx(this, [...this.sprites.values()], () => {
+        this.flourishing = false;
+        this.winCancel = undefined;
+        if (this.sys.isActive()) this.resync();
+      });
     }
   }
 
@@ -190,13 +215,26 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
       )
     );
     s.tableau.forEach((col, ci) => {
+      // Compact stacking: only the top card and the one under it show
+      // their index; deeper face-up cards collapse to edge slivers.
+      let prevUp = -1;
+      for (let i = col.length - 1, seen = 0; i >= 0 && seen < 2; i--) {
+        if (!col[i].faceUp) break;
+        prevUp = i;
+        seen++;
+      }
+      const gapAbove = (i: number): number => {
+        const p = col[i - 1];
+        if (!p.faceUp) return L.downGap;
+        return i - 1 === prevUp ? L.indexGap : L.buriedGap;
+      };
       let need = L.cardH;
-      for (let i = 1; i < col.length; i++) need += col[i - 1].faceUp ? L.upGap : L.downGap;
+      for (let i = 1; i < col.length; i++) need += gapAbove(i);
       const avail = this.scale.height - L.tableauTop - L.cardH - L.bottomPad;
       const k = need > L.cardH ? Math.max(0.15, Math.min(1, (avail - L.cardH) / (need - L.cardH))) : 1;
       let y = L.tableauTop + L.cardH / 2;
       col.forEach((c, i) => {
-        if (i > 0) y += (col[i - 1].faceUp ? L.upGap : L.downGap) * k;
+        if (i > 0) y += gapAbove(i) * k;
         out.push({
           card: c,
           ref: { area: 'tableau', index: ci },
@@ -243,6 +281,7 @@ export class KlondikeScene extends Phaser.Scene implements DragHost {
   }
 
   private dispose(): void {
+    this.winCancel?.();
     this.unsub?.();
     this.unsubHint?.();
     this.dragCtl?.destroy();

@@ -18,6 +18,7 @@ import { Pile } from '../objects/Pile.js';
 import { syncSprites, shakeCard, type Target } from '../objects/spriteSync.js';
 import { SwipeController } from '../objects/SwipeController.js';
 import { hintFx, type HintRect } from '../objects/hintFx.js';
+import { winFx } from '../objects/winFx.js';
 import { bindSfx, playSfx } from '../sfx.js';
 import { haptic } from '../haptics.js';
 
@@ -33,6 +34,8 @@ export class TriPeaksScene extends Phaser.Scene {
   private unsub?: () => void;
   private unsubHint?: () => void;
   private dealtSeed?: string;
+  private flourishing = false;
+  private winCancel?: () => void;
 
   constructor() {
     super('tripeaks');
@@ -61,10 +64,21 @@ export class TriPeaksScene extends Phaser.Scene {
   private onState(s: GameState): void {
     if (s.variant !== 'tripeaks') return;
     this.current = s;
+    // A new deal/undo mid-flourish cancels the celebration and resyncs.
+    if (this.flourishing && s.status !== 'won') {
+      this.winCancel?.();
+      return; // the flourish's onDone resyncs with the latest state
+    }
     this.syncState(s);
-    if (s.status === 'won') {
+    if (s.status === 'won' && !this.flourishing && !gameStore.replaying) {
       playSfx('win');
       haptic('win');
+      this.flourishing = true;
+      this.winCancel = winFx(this, [...this.sprites.values()], () => {
+        this.flourishing = false;
+        this.winCancel = undefined;
+        if (this.sys.isActive() && this.current) this.syncState(this.current);
+      });
     }
   }
 
@@ -194,6 +208,7 @@ export class TriPeaksScene extends Phaser.Scene {
   }
 
   private dispose(): void {
+    this.winCancel?.();
     this.unsub?.();
     this.unsubHint?.();
     this.swipeCtl?.destroy();
