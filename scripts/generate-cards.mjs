@@ -25,8 +25,8 @@ const rankLabel = (r) => RANK_LABEL[r] ?? String(r);
 function corner(rank, suit, x, y, rotate) {
   const { glyph, color } = SUITS[suit];
   const inner = `
-    <text x="${x}" y="${y}" font-size="30" text-anchor="middle" fill="${color}">${rank}</text>
-    <text x="${x}" y="${y + 28}" font-size="26" text-anchor="middle" fill="${color}">${glyph}</text>`;
+    <text x="${x}" y="${y}" font-size="44" text-anchor="middle" fill="${color}">${rank}</text>
+    <text x="${x}" y="${y + 32}" font-size="36" text-anchor="middle" fill="${color}">${glyph}</text>`;
   return rotate ? `<g transform="rotate(180 ${W / 2} ${H / 2})">${inner}</g>` : inner;
 }
 
@@ -36,9 +36,9 @@ function face(suit, rank) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">
   <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="#fdfdfb" stroke="#c4c7c0" stroke-width="2"/>
   <g font-family="Arial,Helvetica,sans-serif" font-weight="700">
-    ${corner(label, suit, 22, 34, false)}
-    ${corner(label, suit, 22, 34, true)}
-    <text x="${W / 2}" y="${H / 2 + 30}" font-size="72" text-anchor="middle" fill="${color}">${glyph}</text>
+    ${corner(label, suit, 28, 46, false)}
+    ${corner(label, suit, 28, 46, true)}
+    <text x="${W / 2}" y="${H / 2 + 34}" font-size="96" text-anchor="middle" fill="${color}">${glyph}</text>
   </g>
 </svg>
 `;

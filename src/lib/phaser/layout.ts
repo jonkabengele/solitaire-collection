@@ -40,8 +40,8 @@ const COLS = 7;
  * Cards keep a 5:7 aspect; the board centers horizontally when capped.
  */
 export function computeLayout(width: number, height: number): BoardLayout {
-  const margin = Math.max(6, Math.min(20, width * 0.018));
-  const gutter = Math.max(3, Math.min(12, width * 0.012));
+  const margin = Math.max(6, Math.min(20, width * 0.010));
+  const gutter = Math.max(3, Math.min(12, width * 0.008));
   const cardW = Math.min(
     (width - 2 * margin - (COLS - 1) * gutter) / COLS,
     height * 0.17,
@@ -97,7 +97,7 @@ export function computeLayout(width: number, height: number): BoardLayout {
     tableauX: Array.from({ length: COLS }, (_, i) => colX(i)),
     tableauTop,
     downGap: cardH * 0.16,
-    upGap: cardH * 0.32,
+    upGap: cardH * 0.36,
     bottomPad: Math.max(8, height * 0.015),
     zones
   };
