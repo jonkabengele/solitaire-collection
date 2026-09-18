@@ -7,10 +7,11 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
   version: string;
 };
 
-export default defineConfig({
-  // BASE_PATH lets a deploy target host under a subpath (e.g. GitHub Pages
-  // project sites live at /<repo>/); local dev stays at '/'.
-  base: process.env.BASE_PATH ?? '/',
+export default defineConfig(({ command }) => ({
+  // Production builds target GitHub Pages project hosting at /<repo>/, so
+  // they must never emit root-relative asset URLs. BASE_PATH can override
+  // (e.g. a future root-domain deploy); 'serve' stays at '/' for dev.
+  base: process.env.BASE_PATH ?? (command === 'build' ? '/solitaire-collection/' : '/'),
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __REPO_URL__: JSON.stringify(process.env.REPO_URL ?? '')
@@ -82,4 +83,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));
