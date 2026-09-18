@@ -30,7 +30,13 @@ export class CardSprite extends Phaser.GameObjects.Image {
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0, 'card-back');
     scene.add.existing(this);
-    this.on('pointerdown', () => this.onTap?.(this));
+    // windowEvents means DOM-overlay taps reach the scene — only events
+    // whose DOM target is the canvas itself count as card taps.
+    this.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      const target = pointer.event?.target;
+      if (target && target !== scene.game.canvas) return;
+      this.onTap?.(this);
+    });
   }
 
   /**

@@ -27,10 +27,30 @@ export interface DragHost {
 
 const TAP_MAX_DIST = 12;
 const TAP_MAX_MS = 400;
+/**
+ * Ignore a second "tap" arriving this soon after the last one on the same
+ * card — mobile browsers can surface a single touch as both a touch and
+ * an emulated-mouse pointer event, which would fire the tap twice.
+ */
+const TAP_DEDUP_MS = 350;
 
 export class DragController {
   private group: CardSprite[] = [];
   private offsets: { x: number; y: number }[] = [];
+  private lastTapAt = 0;
+  private lastTapGo: CardSprite | null = null;
+
+  /**
+   * Phaser listens on `window` (windowEvents), so pointer events that land
+   * on DOM overlays (modals, HUD) reach the scene too. Only events whose
+   * DOM target is the canvas itself count as board input — everything
+   * else belongs to the overlay and must be ignored here.
+   */
+  private onCanvas(pointer: Phaser.Input.Pointer): boolean {
+    const target = pointer.event?.target;
+    const canvas = this.scene.game.canvas;
+    return !target || target === canvas;
+  }
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -55,10 +75,11 @@ export class DragController {
   }
 
   private onDragStart(
-    _pointer: Phaser.Input.Pointer,
+    pointer: Phaser.Input.Pointer,
     go: Phaser.GameObjects.GameObject
   ): void {
     if (!(go instanceof CardSprite)) return;
+    if (!this.onCanvas(pointer)) return;
     haptic('pickup');
     this.group = this.host.runSprites(go.ref, go.pileIndex);
     if (!this.group.includes(go)) this.group = [go];
@@ -104,8 +125,14 @@ export class DragController {
   /** Tap detection → a quick tap auto-plays the card's best safe move. */
   private onPointerUp(pointer: Phaser.Input.Pointer, go: Phaser.GameObjects.GameObject): void {
     if (!(go instanceof CardSprite)) return;
+    if (!this.onCanvas(pointer)) return;
     if (pointer.getDistance() > TAP_MAX_DIST) return;
     if (pointer.upTime - pointer.downTime > TAP_MAX_MS) return;
+    // Emulated-mouse duplicates: same card, near-same moment → ignore.
+    const now = this.scene.time.now;
+    if (go === this.lastTapGo && now - this.lastTapAt < TAP_DEDUP_MS) return;
+    this.lastTapAt = now;
+    this.lastTapGo = go;
     this.host.tryAutoMove(go);
   }
 }

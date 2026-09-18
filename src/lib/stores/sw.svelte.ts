@@ -61,5 +61,15 @@ export async function checkForUpdates(): Promise<void> {
 export async function applyUpdate(): Promise<void> {
   swStore.update = 'applying';
   // reloadPage: true → skipWaiting + reload once the new SW takes control.
-  await updateSW?.(true);
+  // If the new worker never activates (e.g. a precache fetch stalls), the
+  // promise never resolves — so fall back to a hard reload after 8s. The
+  // browser settles the SW state itself on the next load either way.
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('sw update timed out')), 8000)
+  );
+  try {
+    await Promise.race([updateSW?.(true), timeout]);
+  } catch {
+    if (swStore.update === 'applying') location.reload();
+  }
 }

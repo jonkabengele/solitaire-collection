@@ -30,18 +30,24 @@
   }
 
   function pick(v: VariantId): void {
-    if (v !== gameStore.state.variant) gameStore.requestSwitch(v);
+    if (cur === null) {
+      // Pre-game (menu boot): deal straight into the picked variant.
+      gameStore.selectVariant(v);
+    } else if (v !== cur) {
+      gameStore.requestSwitch(v);
+    }
     closeOnMobile();
   }
 
   function practice(): void {
-    const v = gameStore.state.variant;
-    gameStore.newGame(v);
+    if (cur === null) return;
+    gameStore.newGame(cur);
     practiceStore.start();
     closeOnMobile();
   }
 
-  const cur = $derived(gameStore.state.variant);
+  // Null until the first variant pick — state throws before a game exists.
+  const cur = $derived(gameStore.started ? gameStore.state.variant : null);
 </script>
 
 {#if uiStore.navOpen}
@@ -69,7 +75,7 @@
   {/each}
 
   <p class="section">MODES</p>
-  <button class="item" onclick={practice}>
+  <button class="item" onclick={practice} disabled={cur === null}>
     <span class="icon" aria-hidden="true">⏱</span>
     <span class="label">
       <span class="name">Practice Race</span>
