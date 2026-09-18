@@ -3,6 +3,7 @@
   import { gameStore } from '../stores/gameStore.svelte.js';
   import { settingsStore } from '../stores/settings.svelte.js';
   import { uiStore } from '../stores/ui.svelte.js';
+  import { swStore, checkForUpdates, applyUpdate } from '../stores/sw.svelte.js';
 
   const VARIANTS: { id: VariantId; short: string; full: string }[] = [
     { id: 'klondike', short: 'K', full: 'Klondike' },
@@ -91,6 +92,25 @@
         />
         <span class="vol">{Math.round(settingsStore.volume * 100)}%</span>
       </label>
+      <div class="slider-row">
+        <span>App</span>
+        {#if swStore.update === 'ready'}
+          <button class="primary update-btn" onclick={applyUpdate}>Update ready — apply</button>
+        {:else}
+          <button
+            class="ghost update-btn"
+            onclick={checkForUpdates}
+            disabled={swStore.update === 'checking' || swStore.update === 'applying'}
+          >
+            {swStore.update === 'checking' ? 'Checking…' : swStore.update === 'applying' ? 'Updating…' : 'Check Updates'}
+          </button>
+        {/if}
+      </div>
+      {#if swStore.update === 'none'}
+        <p class="update-hint">You're on the latest version.</p>
+      {:else if swStore.update === 'ready'}
+        <p class="update-hint">A new version is ready — applying reloads the app.</p>
+      {/if}
       <div class="row">
         <button class="primary" onclick={() => (settingsOpen = false)}>Done</button>
       </div>
@@ -259,6 +279,21 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
     color: rgba(255, 255, 255, 0.7);
+  }
+
+  .slider-row span:first-child {
+    flex: 1;
+  }
+
+  .update-btn {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.7rem;
+  }
+
+  .update-hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.55);
   }
 
   @media (max-width: 620px) {

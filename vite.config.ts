@@ -24,6 +24,9 @@ export default defineConfig({
       // ('autoUpdate' would force skipWaiting+clientsClaim, hijacking a
       // live session.) We never render the prompt UI; launch is the prompt.
       registerType: 'prompt',
+      // Registered manually via virtual:pwa-register in sw.svelte.ts so the
+      // app holds the updateSW handle for the settings "Check Updates" flow.
+      injectRegister: false,
       includeAssets: ['icons/*.png'],
       manifest: {
         name: 'Solitaire Collection',
