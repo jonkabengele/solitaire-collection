@@ -87,6 +87,11 @@ export function requestSeeds(v: VariantId): void {
  * beats an unbounded stall.
  */
 export function solvableSeed(v: VariantId): string {
+  // Spider: solver verification doesn't scale to 104-card deals — 1-suit
+  // deals are near-always winnable anyway, so raw random seeds are used.
+  if (v === 'spider') {
+    return `s-${Date.now().toString(36)}-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
+  }
   const arr = read(v);
   const cached = arr.shift();
   if (cached !== undefined) {

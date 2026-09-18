@@ -9,11 +9,19 @@
   import Social from './lib/ui/Social.svelte';
   import Replay from './lib/ui/Replay.svelte';
   import InstallBanner from './lib/ui/InstallBanner.svelte';
+  import SideNav from './lib/ui/SideNav.svelte';
   import { uiStore } from './lib/stores/ui.svelte.js';
   import { gameStore, type NavTarget } from './lib/stores/gameStore.svelte.js';
   import { installStore } from './lib/stores/install.svelte.js';
   import { raceStore } from './lib/stores/raceStore.svelte.js';
+  import { practiceStore } from './lib/stores/practice.svelte.js';
   import { RACE_AVAILABLE } from './lib/net/nakama.js';
+
+  // ≥900px: the sidenav docks (shell shifts right); below it overlays.
+  const mq = window.matchMedia('(min-width: 900px)');
+  let wide = $state(mq.matches);
+  mq.addEventListener('change', (e) => (wide = e.matches));
+  const docked = $derived(uiStore.navOpen && wide);
 
   let gameEl!: HTMLDivElement;
   let game: Phaser.Game | null = null;
@@ -33,6 +41,7 @@
       uiStore.aboutOpen ||
       uiStore.raceOpen ||
       uiStore.socialOpen ||
+      practiceStore.timeUp ||
       gameStore.replaying;
     gameStore.setPaused('overlay', open);
   });
@@ -97,7 +106,9 @@
   });
 </script>
 
-<main class="shell">
+<SideNav />
+
+<main class="shell" class:docked>
   {#if !uiStore.menuOpen}
     <HUD />
   {/if}
@@ -135,6 +146,11 @@
     padding-bottom: var(--sab);
     padding-left: var(--sal);
     padding-right: var(--sar);
+  }
+
+  /* Docked sidenav: shift the board right on wide screens. */
+  .shell.docked {
+    padding-left: calc(15rem + var(--sal));
   }
 
   .game {

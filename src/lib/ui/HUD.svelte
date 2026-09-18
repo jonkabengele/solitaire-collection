@@ -4,11 +4,14 @@
   import { settingsStore } from '../stores/settings.svelte.js';
   import { uiStore } from '../stores/ui.svelte.js';
   import { swStore, checkForUpdates, applyUpdate } from '../stores/sw.svelte.js';
+  import { practiceStore } from '../stores/practice.svelte.js';
+  import { getVariant } from '../variants/index.js';
 
-  const VARIANTS: { id: VariantId; short: string; full: string }[] = [
-    { id: 'klondike', short: 'K', full: 'Klondike' },
-    { id: 'freecell', short: 'FC', full: 'FreeCell' },
-    { id: 'tripeaks', short: 'TP', full: 'TriPeaks' }
+  const VARIANTS: { id: VariantId; full: string }[] = [
+    { id: 'klondike', full: 'Klondike' },
+    { id: 'freecell', full: 'FreeCell' },
+    { id: 'tripeaks', full: 'TriPeaks' },
+    { id: 'spider', full: 'Spider' }
   ];
 
   let now = $state(Date.now());
@@ -22,6 +25,7 @@
   let settingsOpen = $state(false);
   let helpOpen = $state(false);
   let newConfirm = $state(false);
+  let quitConfirm = $state(false);
 
   const RULES: Record<VariantId, { title: string; lines: string[] }> = {
     klondike: {
@@ -52,6 +56,16 @@
         'No playable card? Tap the stock to draw — it is limited, so spend it wisely.',
         'Clearing a card can uncover the ones beneath it; long chains are the fastest way up.'
       ]
+    },
+    spider: {
+      title: 'How to play Spider',
+      lines: [
+        'Goal: clear all eight runs — King down to Ace, all in the same suit.',
+        'Columns build downward regardless of suit, but only same-suit runs can move together.',
+        'Tap the stock to deal one card onto every column — every column must hold a card first.',
+        'A completed King-to-Ace run in one suit clears itself to a top slot.',
+        'Any card or run can fill an empty column.'
+      ]
     }
   };
 
@@ -67,18 +81,29 @@
         ? (gameStore.paused ? gameStore.pauseBeganAt : now) - cur.startedAt
         : cur.elapsedMs
   );
+  // Practice race: the clock counts DOWN from 5:00 while racing.
+  const racing = $derived(practiceStore.active && cur.status === 'playing');
+  const remaining = $derived(practiceStore.endsAt === null ? 0 : practiceStore.endsAt - now);
 
   // Any open dialog freezes the play clock; reasons stack in the store.
   $effect(() => {
     gameStore.setPaused('settings', settingsOpen);
     gameStore.setPaused('help', helpOpen);
     gameStore.setPaused('confirm-new', newConfirm);
+    gameStore.setPaused('confirm-quit', quitConfirm);
     gameStore.setPaused('switch', pending !== null);
+    gameStore.setPaused('timeup', practiceStore.timeUp);
     return () => {
-      for (const r of ['settings', 'help', 'confirm-new', 'switch']) {
+      for (const r of ['settings', 'help', 'confirm-new', 'confirm-quit', 'switch', 'timeup']) {
         gameStore.setPaused(r, false);
       }
     };
+  });
+
+  // Race bookkeeping: flag the deadline, stand down when the game ends.
+  $effect(() => {
+    if (racing && remaining <= 0) practiceStore.timeUp = true;
+    if (practiceStore.active && cur.status !== 'playing') practiceStore.stop();
   });
 
   /** New deals abandoning an in-progress game ask first. */
@@ -95,28 +120,20 @@
 
 <header class="hud">
   <div class="left">
-    <button class="ghost" title="Menu" aria-label="Menu" onclick={() => gameStore.openMenu()}>
+    <button class="ghost" title="Menu" aria-label="Menu" onclick={() => (uiStore.navOpen = !uiStore.navOpen)}>
       ☰
     </button>
-    <div class="switcher" role="group" aria-label="Variant">
-      {#each VARIANTS as v (v.id)}
-        <button
-          class="seg"
-          class:active={cur.variant === v.id}
-          onclick={() => gameStore.requestSwitch(v.id)}
-        >
-          <span class="short">{v.short}</span>
-          <span class="full">{v.full}</span>
-        </button>
-      {/each}
-    </div>
   </div>
   <div class="stats">
     {#if cur.status !== 'playing'}
       <span class="status">{cur.status === 'won' ? 'You win!' : 'No moves left'}</span>
     {/if}
     <span>{gameStore.moveCount} moves</span>
-    <span>{fmt(elapsed)}</span>
+    {#if racing}
+      <span class="race-clock" class:urgent={remaining < 60000}>⏱ {fmt(remaining)}</span>
+    {:else}
+      <span>{fmt(elapsed)}</span>
+    {/if}
   </div>
   <div class="actions">
     <button class="wide" onclick={() => gameStore.requestHint()} disabled={cur.status !== 'playing'}>Hint</button>
@@ -125,7 +142,7 @@
     <button class="wide" onclick={requestNew}>New</button>
     <button class="ghost" title="Statistics" aria-label="Statistics" onclick={() => (uiStore.statsOpen = true)}>📊</button>
     <button class="ghost" title="How to play" aria-label="How to play" onclick={() => (helpOpen = true)}>?</button>
-    <button class="ghost" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>⚙</button>
+    <button class="ghost" title="Pause" aria-label="Pause" onclick={() => (settingsOpen = true)}>⏸</button>
   </div>
 </header>
 
@@ -140,7 +157,7 @@
 {#if settingsOpen}
   <div class="overlay" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
     <div class="dialog">
-      <p class="q">Settings</p>
+      <p class="q">Paused</p>
       <label class="slider-row">
         <span>Sound</span>
         <input
@@ -172,7 +189,59 @@
         <p class="update-hint">A new version is ready — applying reloads the app.</p>
       {/if}
       <div class="row">
-        <button class="primary" onclick={() => (settingsOpen = false)}>Done</button>
+        <button class="primary" onclick={() => (settingsOpen = false)}>Resume</button>
+        <button class="danger" onclick={() => (quitConfirm = true)}>Quit game</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if quitConfirm}
+  <div class="overlay" role="dialog" aria-modal="true" aria-label="Quit game" tabindex="-1">
+    <div class="dialog">
+      <p class="q">Quit to the menu?</p>
+      <p class="sub">Your game is saved — you can resume it anytime.</p>
+      <div class="row">
+        <button
+          class="primary"
+          onclick={() => {
+            quitConfirm = false;
+            settingsOpen = false;
+            gameStore.openMenu();
+          }}
+        >
+          Quit
+        </button>
+        <button onclick={() => (quitConfirm = false)}>Keep playing</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if practiceStore.timeUp}
+  <div class="overlay" role="dialog" aria-modal="true" aria-label="Time up" tabindex="-1">
+    <div class="dialog">
+      <p class="q">⏱ Time!</p>
+      <p class="sub">Final score: {getVariant(cur.variant).score(cur)} · {gameStore.moveCount} moves</p>
+      <div class="row">
+        <button
+          class="primary"
+          onclick={() => {
+            gameStore.newGame();
+            practiceStore.start();
+          }}
+        >
+          Race again
+        </button>
+        <button
+          onclick={() => {
+            practiceStore.stop();
+            settingsOpen = false;
+            gameStore.openMenu();
+          }}
+        >
+          Quit
+        </button>
       </div>
     </div>
   </div>
@@ -249,27 +318,6 @@
     min-width: 0;
   }
 
-  .switcher {
-    display: flex;
-    border-radius: 999px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .seg {
-    border-radius: 0;
-    background: transparent;
-    padding: 0.35rem 0.6rem;
-  }
-
-  .seg.active {
-    background: rgba(255, 255, 255, 0.22);
-  }
-
-  .seg .full {
-    display: none;
-  }
-
   .stats {
     display: flex;
     gap: 0.9rem;
@@ -281,6 +329,15 @@
   .status {
     color: #ffd166;
     font-weight: 600;
+  }
+
+  .race-clock {
+    color: #ffd166;
+    font-weight: 700;
+  }
+
+  .race-clock.urgent {
+    color: #ff8f97;
   }
 
   .actions {
@@ -357,6 +414,11 @@
   .row .primary {
     background: #ffd166;
     color: #123f30;
+  }
+
+  .row .danger {
+    background: rgba(192, 42, 51, 0.25);
+    color: #ffb4ba;
   }
 
   .slider-row {
@@ -447,16 +509,6 @@
       font-size: 1.25rem;
       line-height: 1;
       border-radius: 12px;
-    }
-  }
-
-  @media (min-width: 620px) {
-    .seg .short {
-      display: none;
-    }
-
-    .seg .full {
-      display: inline;
     }
   }
 </style>

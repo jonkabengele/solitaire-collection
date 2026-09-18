@@ -102,8 +102,8 @@ export function computeFreeCellLayout(width: number, height: number): FreeCellLa
     foundations,
     tableauX: Array.from({ length: COLS }, (_, i) => colX(i)),
     tableauTop,
-    indexGap: cardH * 0.24,
-    buriedGap: cardH * 0.10,
+    indexGap: cardH * 0.22,
+    buriedGap: cardH * 0.17,
     bottomPad: Math.max(8, height * 0.015),
     zones
   };

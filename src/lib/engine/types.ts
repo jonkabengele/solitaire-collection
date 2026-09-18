@@ -36,7 +36,7 @@ export type Move =
 
 export type GameStatus = 'playing' | 'won' | 'lost';
 
-export type VariantId = 'klondike' | 'freecell' | 'tripeaks';
+export type VariantId = 'klondike' | 'freecell' | 'tripeaks' | 'spider';
 
 /** Fields shared by every variant's game state. */
 export type BaseState = {
@@ -83,8 +83,24 @@ export type TriPeaksState = BaseState & {
   waste: Card[];
 };
 
+/**
+ * Spider: two decks (104 cards), 10 tableau columns. Columns build down
+ * regardless of suit, but only same-suit descending runs move as a unit;
+ * a completed K..A run clears to a foundation. Stock deals in rows of 10.
+ */
+export type SpiderState = BaseState & {
+  variant: 'spider';
+  /** Deck composition: 1, 2, or 4 suits (difficulty). */
+  suitCount: 1 | 2 | 4;
+  /** Undealt cards; each draw places one face-up card on every column. */
+  stock: Card[];
+  tableau: Card[][];
+  /** Completed K..A same-suit runs (8 = win). */
+  foundations: Card[][];
+};
+
 /** Discriminated union of all variant states — the canonical `GameState`. */
-export type GameState = KlondikeState | FreeCellState | TriPeaksState;
+export type GameState = KlondikeState | FreeCellState | TriPeaksState | SpiderState;
 
 /**
  * The per-variant contract (spec Phase 1). All functions are pure:

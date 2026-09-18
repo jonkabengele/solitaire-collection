@@ -21,7 +21,8 @@
   const VARIANTS: VariantCard[] = [
     { id: 'klondike', name: 'Klondike', blurb: 'The classic', preview: 's1' },
     { id: 'freecell', name: 'FreeCell', blurb: 'All open, pure skill', preview: 's12' },
-    { id: 'tripeaks', name: 'TriPeaks', blurb: 'Clear the peaks', preview: 'h10' }
+    { id: 'tripeaks', name: 'TriPeaks', blurb: 'Clear the peaks', preview: 'h10' },
+    { id: 'spider', name: 'Spider', blurb: 'Two decks, ten columns', preview: 's13' }
   ];
 
   function fmtBest(ms: number | null): string {

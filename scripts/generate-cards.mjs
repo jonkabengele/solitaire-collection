@@ -25,7 +25,7 @@ const rankLabel = (r) => RANK_LABEL[r] ?? String(r);
 function corner(rank, suit, x, y) {
   const { glyph, color } = SUITS[suit];
   return `
-    <text x="${x}" y="${y}" font-size="34" text-anchor="middle" fill="${color}">${rank}</text>
+    <text x="${x}" y="${y}" font-size="28" text-anchor="middle" fill="${color}">${rank}</text>
     <text x="${W - x}" y="${y}" font-size="30" text-anchor="middle" fill="${color}">${glyph}</text>`;
 }
 
@@ -38,7 +38,7 @@ function face(suit, rank) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">
   <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="12" fill="#fdfdfb" stroke="#c4c7c0" stroke-width="2"/>
   <g font-family="Arial,Helvetica,sans-serif" font-weight="700">
-    ${corner(label, suit, 20, 32)}
+    ${corner(label, suit, 17, 28)}
     <text x="${W / 2}" y="${H / 2 + 50}" font-size="140" text-anchor="middle" fill="${color}">${glyph}</text>
   </g>
 </svg>

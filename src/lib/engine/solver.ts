@@ -36,6 +36,12 @@ export function stateKey(state: GameState): string {
       ].join('|');
     case 'tripeaks':
       return [pile(state.tableau), face(state.stock), pile(state.waste)].join('|');
+    case 'spider':
+      return [
+        face(state.stock),
+        state.tableau.map(face).sort().join(','),
+        String(state.foundations.length)
+      ].join('|');
   }
 }
 

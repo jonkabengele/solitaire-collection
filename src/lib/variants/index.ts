@@ -2,9 +2,10 @@ import type { Variant, VariantId } from '../engine/types.js';
 import { klondike } from './klondike.js';
 import { freecell } from './freecell.js';
 import { tripeaks } from './tripeaks.js';
+import { spider } from './spider.js';
 
 /** All implemented variants. */
-export const VARIANTS: readonly Variant[] = [klondike, freecell, tripeaks];
+export const VARIANTS: readonly Variant[] = [klondike, freecell, tripeaks, spider];
 
 /**
  * Look up a variant implementation by id.

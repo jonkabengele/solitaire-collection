@@ -42,7 +42,9 @@ export class CardSprite extends Phaser.GameObjects.Image {
     this.ref = ref;
     this.pileIndex = pileIndex;
     this.faceUp = card.faceUp;
-    const tex = card.faceUp ? `card-${card.id}` : 'card-back';
+    // Spider duplicate ids carry a `#n` serial suffix; the face texture
+    // is shared per suit+rank, so the key strips it (`s5#3` → `card-s5`).
+    const tex = card.faceUp ? `card-${card.id.split('#')[0]}` : 'card-back';
     if (tex === this.shownTex) return;
     if (!this.placed) {
       this.setTexture(tex);

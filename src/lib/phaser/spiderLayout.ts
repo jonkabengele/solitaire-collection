@@ -1,53 +1,49 @@
 /**
- * Responsive board geometry for Klondike. Pure math over canvas size —
- * the scene positions sprites and drop zones from this single source.
+ * Responsive board geometry for Spider. Ten columns is the tightest
+ * layout in the collection — margins and gutters shrink harder so cards
+ * stay as wide as a phone allows; the top row (stock + 8 cleared-run
+ * slots) shares the column grid like Klondike.
  */
 import Phaser from 'phaser';
 import type { PileRef } from '../engine/types.js';
+import type { DropZone, Point } from './layout.js';
 
-/** Canvas point (center of a pile/card). */
-export type Point = { x: number; y: number };
+export type { DropZone, Point };
 
-/** A drop/tap target rectangle bound to a pile. `anchor` is where the slot
- * outline is drawn — for tableau columns it differs from the rect center. */
-export type DropZone = { ref: PileRef; rect: Phaser.Geom.Rectangle; anchor: Point };
-
-/** Everything KlondikeScene needs to place cards and hit-test drops. */
-export type BoardLayout = {
+/** Everything SpiderScene needs to place cards and hit-test drops. */
+export type SpiderLayout = {
   cardW: number;
   cardH: number;
+  /** Stock draw pile (top-left). */
   stock: Point;
-  waste: Point;
+  /** Eight cleared-run slots along the top row (columns 2..9). */
   foundations: Point[];
-  /** Center x of each of the 7 tableau columns. */
+  /** Center x of each of the 10 tableau columns. */
   tableauX: number[];
   /** Top edge y of the tableau row (first card's top). */
   tableauTop: number;
   /** Vertical gap contributed by a face-down card. */
   downGap: number;
-  /** Strip shown of a face-up card that needs a readable index (the card under the top). */
+  /** Strip shown of the face-up card under the column top — index readable. */
   indexGap: number;
-  /** Strip shown of a buried face-up card — a bare edge, index hidden. */
+  /** Strip shown of a buried face-up card — rank peeks through. */
   buriedGap: number;
-  /** Reserved space below the tallest tableau column. */
+  /** Reserved space below the tallest column. */
   bottomPad: number;
-  /** Drop targets, foundations first (top row wins over tableau bands). */
+  /** Drop targets, stock first (top row wins over tableau bands). */
   zones: DropZone[];
 };
 
-const COLS = 7;
+const COLS = 10;
 
-/**
- * Compute the Klondike layout for a canvas of `width`×`height`.
- * Cards keep a 5:7 aspect; the board centers horizontally when capped.
- */
-export function computeLayout(width: number, height: number): BoardLayout {
-  const margin = Math.max(6, Math.min(20, width * 0.010));
-  const gutter = Math.max(3, Math.min(12, width * 0.008));
+/** Compute the Spider layout for a canvas of `width`×`height`. */
+export function computeSpiderLayout(width: number, height: number): SpiderLayout {
+  const margin = Math.max(4, Math.min(14, width * 0.008));
+  const gutter = Math.max(2, Math.min(8, width * 0.006));
   const cardW = Math.min(
     (width - 2 * margin - (COLS - 1) * gutter) / COLS,
-    height * 0.17,
-    124
+    height * 0.15,
+    96
   );
   const cardH = cardW * 1.4;
   const boardW = COLS * cardW + (COLS - 1) * gutter;
@@ -55,7 +51,7 @@ export function computeLayout(width: number, height: number): BoardLayout {
   const top = Math.max(8, height * 0.015);
   const colX = (i: number): number => startX + i * (cardW + gutter) + cardW / 2;
   const topY = top + cardH / 2;
-  const rowGap = Math.max(10, height * 0.02);
+  const rowGap = Math.max(8, height * 0.018);
   const tableauTop = top + cardH + rowGap;
   const inflate = cardW * 0.12;
 
@@ -69,11 +65,9 @@ export function computeLayout(width: number, height: number): BoardLayout {
 
   const zones: DropZone[] = [];
   const stock = { x: colX(0), y: topY };
-  const waste = { x: colX(1), y: topY };
-  const foundations = [3, 4, 5, 6].map((i) => ({ x: colX(i), y: topY }));
+  const foundations = Array.from({ length: 8 }, (_, i) => ({ x: colX(2 + i), y: topY }));
 
   zones.push({ ref: { area: 'stock', index: 0 }, rect: pileRect(stock), anchor: stock });
-  zones.push({ ref: { area: 'waste', index: 0 }, rect: pileRect(waste), anchor: waste });
   foundations.forEach((p, i) =>
     zones.push({ ref: { area: 'foundation', index: i }, rect: pileRect(p), anchor: p })
   );
@@ -94,7 +88,6 @@ export function computeLayout(width: number, height: number): BoardLayout {
     cardW,
     cardH,
     stock,
-    waste,
     foundations,
     tableauX: Array.from({ length: COLS }, (_, i) => colX(i)),
     tableauTop,

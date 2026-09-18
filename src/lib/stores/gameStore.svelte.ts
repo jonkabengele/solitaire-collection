@@ -328,7 +328,8 @@ class GameStore {
     if (m.type === 'draw') return 50;
     const s = this.state;
     if (m.to.area === 'foundation') return m.from.area === 'cell' ? 0 : 1;
-    const hasColumns = s.variant === 'klondike' || s.variant === 'freecell';
+    const hasColumns =
+      s.variant === 'klondike' || s.variant === 'freecell' || s.variant === 'spider';
     const srcPile = hasColumns && m.from.area === 'tableau' ? s.tableau[m.from.index] : null;
     const srcIdx = srcPile ? srcPile.findIndex((c) => c.id === m.cardId) : -1;
     if (m.to.area === 'tableau') {

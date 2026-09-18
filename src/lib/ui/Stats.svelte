@@ -6,7 +6,8 @@
   const VARIANTS: { id: VariantId; name: string }[] = [
     { id: 'klondike', name: 'Klondike' },
     { id: 'freecell', name: 'FreeCell' },
-    { id: 'tripeaks', name: 'TriPeaks' }
+    { id: 'tripeaks', name: 'TriPeaks' },
+    { id: 'spider', name: 'Spider' }
   ];
 
   /** Two-step reset confirmation per variant. */
